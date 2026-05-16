@@ -1,0 +1,31 @@
+1. 模块的入口与出口宏及初始化失败返回值
+宏定义：内核模块的入口函数和出口函数分别通过 module_init(入口函数名) 和 module_exit(出口函数名) 这两个宏来指定。
+返回值：入口函数（初始化函数）的返回值类型是 int。如果模块初始化成功，必须返回 0；如果初始化失败（例如内存分配失败、资源被占用等），必须返回一个负的错误码（如 -ENOMEM 表示内存不足，-EBUSY 表示资源忙）。内核会根据这个负值判断加载失败，并自动清理已分配的资源。
+
+2. insmod 与 modprobe 的主要区别及使用场景
+主要区别：
+依赖处理：insmod 不会解析和处理模块的依赖关系，如果模块依赖其他模块，必须手动先加载依赖项；modprobe 会自动读取 modules.dep 文件，递归地加载所有依赖模块。
+路径与查找：insmod 必须指定 .ko 模块文件的绝对或相对路径；modprobe 只需要提供模块名，它会自动在标准目录（如 /lib/modules/$(uname -r)/）中搜索。
+配置支持：modprobe 支持读取 /etc/modprobe.d/ 下的配置文件（如别名、默认参数），而 insmod 仅支持命令行传参。
+必须使用 modprobe 的情况：当你要加载的模块存在依赖关系时，必须使用 modprobe（否则需要极其繁琐地手动按顺序加载所有依赖）。此外，在生产环境或日常系统管理中，为了保证稳定性和自动化，也强烈建议优先使用 modprobe。
+
+3. Makefile 中 obj-m 的正确写法
+源文件名为 my_module.c：
+obj-m 后面的变量名必须与最终生成的模块名一致。如果源文件是 my_module.c，这行应该写为：
+obj-m := my_module.o
+由 main.c 和 helper.c 两个源文件链接而成：
+假设最终生成的模块名为 my_mod.ko，你需要先指定模块目标，再列出组成该模块的所有目标文件：
+makefile
+
+obj-m := my_mod.o
+my_mod-y := main.o helper.o
+
+4. module_param 声明的问题分析
+module_param(array_param, int, 0644); 这行声明存在明显的语义矛盾：
+问题分析：变量名 array_param 暗示这是一个数组，但在 module_param 的第二个参数（类型）中却指定了 int（普通整型）。
+正确写法：如果要声明一个整型数组参数，必须使用 module_param_array 宏，并且需要提供额外的参数来接收数组的长度。正确的声明方式如下：
+
+static int array_param[10]; // 假设最大长度为10
+static int array_len;       // 用于接收实际传入的数组元素个数
+// 参数说明：(变量名, 元素类型, 长度指针, 权限)
+module_param_array(array_param, int, &array_len, 0644);
