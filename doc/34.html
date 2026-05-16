@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第34章 内核性能优化技巧</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第34章 内核性能优化技巧</h2></div>
+
+<div class="chapter-guide">
+  <div class="guide-meta">
+    <span class="guide-meta-item"><span class="difficulty-tag diff-advanced">高级</span></span>
+    <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握驱动基础，需要提升驱动效率的开发者</span>
+    <span class="guide-meta-item"><span class="meta-icon">🔧</span> 高吞吐量、低延迟或资源受限的嵌入式设备驱动开发</span>
+  </div>
+  <div class="guide-body">
+    <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>如何分析和定位内核驱动的性能瓶颈</li><li>关键数据结构与内存访问的优化策略</li><li>中断与延迟处理的权衡与优化技巧</li></ul></div>
+    <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">性能剖析</span><span class="guide-concept-tag">缓存友好</span></div>
+  </div>
+</div>
+
+<p>一个网络驱动在千兆网卡上只能跑到300Mbps，一个传感器驱动导致系统响应延迟超过100ms。这些都不是功能bug，而是性能缺陷。内核驱动作为硬件与系统的桥梁，其性能直接决定了整个设备的体验上限。本章不讲理论，只讲实战中能立刻见效的优化技巧。</p>
+
+<h3>性能分析：先测量，再优化</h3>
+<p>优化驱动的第一原则是“不要猜”。你需要数据来告诉你瓶颈在哪里。内核提供了丰富的性能剖析工具，我习惯先用<code>perf</code>和<code>ftrace</code>定位热点。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">性能问题现象</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node secondary">perf top/stat</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node accent">定位热点函数</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node primary">ftrace function_graph</div>
+    <span class="arch-connector">⇄</span>
+    <div class="arch-node accent">分析调用链与耗时</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node secondary">针对性优化</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node primary">验证性能提升</div>
+  </div>
+</div>
+
+<p>比如，使用<code>perf record -g -p &lt;pid&gt; -o perf.data</code>采集驱动进程的性能数据，然后用<code>perf report</code>查看。如果发现<code>kmalloc</code>或<code>copy_to_user</code>占用大量时间，那优化方向就很明确了。</p>
+
+<div class="key-point">
+<h4>关键点：perf 常用命令速查</h4>
+<ul>
+<li><code>perf top</code>: 实时查看系统函数热点，像任务管理器。</li>
+<li><code>perf stat &lt;command&gt;</code>: 统计命令执行期间的CPU周期、缓存命中率等硬件事件。</li>
+<li><code>perf record/report</code>: 记录并生成详细报告，支持符号解析。</li>
+<li><code>echo function_graph > /sys/kernel/debug/tracing/current_tracer</code>: 启用ftrace函数图跟踪，能看清函数调用关系和耗时。</li>
+</ul>
+</div>
+
+<h3>内存访问优化：让数据跑得更快</h3>
+<p>现代CPU的速度远快于内存。一次缓存未命中（Cache Miss）带来的延迟可能相当于执行几十条指令。驱动中不当的内存访问是性能的隐形杀手。</p>
+
+<table>
+<thead><tr><th>优化策略</th><th>具体做法</th><th>预期收益</th><th>适用场景</th></tr></thead>
+<tbody>
+<tr><td><strong>结构体对齐与紧凑</strong></td><td>使用<code>__packed</code>或手动排列成员，减少填充字节</td><td>减少内存占用，提高缓存行利用率</td><td>大量实例化的结构体（如sk_buff、设备私有数据）</td></tr>
+<tr><td><strong>预取数据</strong></td><td>使用<code>prefetch()</code>或<code>prefetchw()</code>提示CPU</td><td>隐藏内存访问延迟</td><td>遍历链表或大数据块前的指针解引用</td></tr>
+<tr><td><strong>使用SLAB缓存</strong></td><td>为频繁分配的对象创建专用<code>kmem_cache</code></td><td>分配/释放速度提升2-5倍</td><td>驱动中高频创建销毁的固定大小对象</td></tr>
+<tr><td><strong>批量操作</strong></td><td>使用<code>copy_to_user</code>的向量版本<code>copy_to_user_iter</code></td><td>减少用户/内核态切换开销</td><td>大量数据在用户空间和内核空间之间拷贝</td></tr>
+</tbody>
+</table>
+
+<p>我在一个视频采集驱动项目中踩过坑：驱动中每个视频帧都用<code>kmalloc</code>分配一个<code>frame_buffer</code>结构体，在1080p@60fps下性能急剧下降。后来改为使用<code>kmem_cache_create</code>创建专用缓存，分配耗时从平均1500纳秒降到了300纳秒左右。</p>
+
+<pre><code><span class="cmt">// 优化前：频繁的通用分配</span>
+<span class="kw">struct</span> frame_buf *buf = <span class="func">kmalloc</span>(<span class="kw">sizeof</span>(<span class="kw">struct</span> frame_buf), GFP_KERNEL);
+
+<span class="cmt">// 优化后：使用SLAB缓存</span>
+<span class="kw">static struct</span> kmem_cache *frame_cache;
+<span class="cmt">// 模块初始化时创建缓存</span>
+frame_cache = <span class="func">kmem_cache_create</span>(<span class="str">"frame_buf"</span>,
+                               <span class="kw">sizeof</span>(<span class="kw">struct</span> frame_buf),
+                               <span class="num">0</span>,
+                               SLAB_HWCACHE_ALIGN,
+                               NULL);
+<span class="cmt">// 分配时从缓存获取</span>
+<span class="kw">struct</span> frame_buf *buf = <span class="func">kmem_cache_alloc</span>(frame_cache, GFP_KERNEL);</code></pre>
+
+<div class="tip-box warning">
+<h4>常见误区</h4>
+<ul>
+<li><strong>过度优化冷路径</strong>：花费大量精力优化一个每秒只执行几次的函数，不如优化执行数百万次的热点函数。先用工具找到瓶颈。</li>
+<li><strong>忽视缓存行伪共享</strong>：两个频繁写的变量位于同一个缓存行（通常64字节），分属不同CPU核心，会导致缓存行在核心间反复无效化，性能暴跌。用<code>__cacheline_aligned_in_smp</code>隔离它们。</li>
+<li><strong>在中断上下文中进行耗时操作</strong>：如在中断处理函数里调用可能阻塞或搜索大型链表。这会导致中断被关闭过久，系统响应延迟。应该将工作推送到工作队列或线程化中断。</li>
+</ul>
+</div>
+
+<h3>中断与延迟优化</h3>
+<p>中断是响应硬件事件的基石，但处理不当会成为系统延迟的罪魁祸首。优化的核心思想是：<strong>中断处理只做最紧急的事，耗时工作后置</strong>。</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>高吞吐场景</h4><ul><li><strong>策略</strong>：NAPI（New API）</li><li><strong>做法</strong>：中断关闭接收，改为轮询模式批量处理网络包。</li><li><strong>效果</strong>：减少中断次数，提升吞吐量，适用于网络、块设备驱动。</li></ul></div>
+  <div class="scenario-card green"><h4>低延迟场景</h4><ul><li><strong>策略</strong>：线程化中断</li><li><strong>做法</strong>：<code>request_threaded_irq</code>，硬中断快速应答，处理函数在独立线程运行。</li><li><strong>效果</strong>：中断处理可被抢占，不阻塞其他中断，系统响应更及时。</li></ul></div>
+  <div class="scenario-card purple"><h4>混合负载场景</h4><ul><li><strong>策略</strong>：工作队列 + 延迟工作</li><li><strong>做法</strong>：中断中调度一个<code>work_struct</code>或<code>delayed_work</code>。</li><li><strong>效果</strong>：将非紧急任务延后执行，平衡吞吐与延迟。</li></ul></div>
+</div>
+
+<p>对于GPIO按键这类简单中断，使用<code>request_irq</code>即可。但对于一个USB主机控制器（如dwc3），它可能每微秒就产生一次中断，必须使用NAPI或类似机制来合并中断。我曾经调试一个SDIO Wi-Fi驱动，发现系统在高负载下卡顿，用<code>cat /proc/interrupts</code>发现该中断每秒触发数万次。将其改为线程化中断后，UI响应立刻变得流畅。</p>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：关于工作队列、线程化中断的具体实现细节和API用法，你可以回顾<a href="#">第28章 内核工作队列机制</a>和<a href="#">第5章 中断处理程序设计</a>，那里有更基础的代码示例。</p>
+</div>
+
+<h3>锁与并发优化</h3>
+<p>锁是保证正确性的工具，但也是性能的敌人。驱动开发中，锁的优化往往能带来最显著的性能提升。</p>
+
+<div class="flowchart">
+  <div class="flow-step">分析临界区大小与频率</div><span class="flow-arrow">→</span>
+  <div class="flow-step">选择最合适的锁机制</div><span class="flow-arrow">→</span>
+  <div class="flow-step">尝试缩小锁粒度或无锁设计</div>
+</div>
+
+<p>首先，避免在驱动中轻易使用<code>mutex_lock</code>这种睡眠锁。对于非常短、且不会睡眠的临界区，优先考虑自旋锁<code>spin_lock</code>。但自旋锁会忙等待，如果临界区执行时间可能较长（比如包含<code>copy_from_user</code>），或者可能睡眠，就必须用互斥锁。</p>
+
+<p>更高级的优化是缩小锁的粒度。不要用一个锁保护整个设备的所有数据。可以为不同的数据块（如接收队列、发送队列、统计信息）使用不同的锁。读写锁<code>rwlock_t</code>或<code>seqlock_t</code>在读多写少的场景下也很有用。</p>
+
+<pre><code><span class="cmt">// 优化前：粗粒度锁，所有操作串行化</span>
+<span class="kw">static</span> <span class="func">DEFINE_MUTEX</span>(dev_lock);
+<span class="kw">static struct</span> device_data global_data;
+
+<span class="cmt">// 优化后：细粒度锁，提升并发度</span>
+<span class="kw">static</span> <span class="func">DEFINE_SPINLOCK</span>(tx_lock);
+<span class="kw">static</span> <span class="func">DEFINE_SPINLOCK</span>(rx_lock);
+<span class="kw">static</span> <span class="func">DEFINE_RWLOCK</span>(stats_lock); <span class="cmt">// 统计信息读多写少</span>
+<span class="kw">static struct</span> tx_queue tx_data;
+<span class="kw">static struct</span> rx_queue rx_data;
+<span class="kw">static struct</span> device_stats stats;</code></pre>
+
+<div class="concept-block">
+<h4>生活类比：锁与超市收银</h4>
+<p><strong>类比</strong>：整个超市只有一个收银台（粗粒度锁），所有顾客排一队，效率低下。开设多个收银台（细粒度锁），或为只买一件商品的顾客开快速通道（读写锁），整体吞吐量就上去了。<br>
+<strong>技术定义</strong>：锁粒度指锁保护的数据范围大小。细粒度锁通过减少不必要的串行化来提升多核并发性能，但增加了编程复杂度和死锁风险。</p>
+</div>
+
+<h3>编译器优化与内联</h3>
+<p>内核本身在编译时使用了<code>-O2</code>优化级别。对于驱动中的关键路径小函数，可以手动使用<code>static inline</code>提示编译器内联，消除函数调用开销。但要注意，滥用内联会导致代码膨胀，反而降低指令缓存命中率。</p>
+
+<p>一个实用的技巧是使用<code>likely()</code>和<code>unlikely()</code>宏来优化分支预测。CPU的流水线讨厌分支预测失败。如果你知道某个条件（比如错误检查）很少成立，就用<code>unlikely()</code>包裹它，帮助编译器生成更优的指令顺序。</p>
+
+<pre><code><span class="kw">int</span> <span class="func">process_packet</span>(<span class="kw">struct</span> sk_buff *skb) {
+    <span class="cmt">// 假设绝大多数数据包都是有效的，错误包极少</span>
+    <span class="kw">if</span> (<span class="func">unlikely</span>(skb->len < MIN_PACKET_LEN)) {
+        <span class="func">kfree_skb</span>(skb);
+        <span class="kw">return</span> -EINVAL;
+    }
+    <span class="cmt">// 正常处理路径...</span>
+    <span class="kw">return</span> <span class="num">0</span>;
+}</code></pre>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1.  <strong>剖析你的驱动</strong>：找一个你之前编写的驱动模块，使用<code>perf record -g -p $(pidof your_module_process) sleep 5</code>（或对内核函数使用<code>perf record -e cycles:u -g -- sleep 5</code>）采集性能数据。用<code>perf report</code>查看，找到最耗时的前三个函数。<br>
+2.  <strong>优化一个内存访问</strong>：检查驱动中频繁分配/释放的、大小固定的数据结构。尝试将其改为使用<code>kmem_cache</code>。使用<code>ktime_get_ns()</code>在分配前后计时，对比优化前后的耗时。<br>
+3.  <strong>调整锁策略</strong>：如果你的驱动有并发访问，分析现有的锁。是否存在一个锁保护了过多不相关的数据？能否将其拆分为多个更细粒度的锁？用压力测试工具（如<code>stress-ng</code>）模拟并发，观察系统负载和吞吐量的变化。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>使用<code>perf top</code>发现驱动中<code>memcpy</code>函数占用大量CPU时间，这可能暗示什么问题？你应该从哪几个方向着手优化？</li>
+<li>为什么在中断处理函数中调用<code>kmalloc(GFP_KERNEL)</code>可能导致系统死锁或高延迟？正确的做法是什么？</li>
+<li>假设你有一个驱动，需要维护一个读操作远多于写操作的配置参数表。从性能角度考虑，你会选择哪种锁机制（mutex, spinlock, rwlock, seqlock）？为什么？</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li><strong>性能优化始于测量</strong>：必须使用<code>perf</code>、<code>ftrace</code>等工具准确定位性能热点，避免盲目优化。</li>
+<li><strong>内存访问是性能关键</strong>：通过结构体紧凑排列、使用SLAB专用缓存、预取数据和批量操作来减少缓存未命中与分配开销。</li>
+<li><strong>中断处理要短平快</strong>：根据场景选择NAPI、线程化中断或工作队列，将耗时任务剥离出中断上下文，保证系统响应性。</li>
+<li><strong>精细控制锁的粒度</strong>：用最合适的锁（自旋锁、互斥锁、读写锁），保护最小的必要数据范围，提升多核并发能力。</li>
+<li><strong>善用编译提示</strong>：对关键小函数使用<code>inline</code>，用<code>likely/unlikely</code>优化分支预测，让生成的机器码更高效。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="33.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="35.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第34章 —</div>
+    </div>
+</body>
+</html>

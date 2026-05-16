@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第33章 内核加密与安全</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第33章 内核加密与安全</h2></div>
+
+<div class="chapter-guide">
+    <div class="guide-meta">
+      <span class="guide-meta-item"><span class="difficulty-tag diff-advanced">高级</span></span>
+      <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握基础驱动框架，需要为设备添加安全功能的开发者</span>
+      <span class="guide-meta-item"><span class="meta-icon">🔧</span> 开发需要数据加密、完整性校验或身份认证的硬件驱动</span>
+    </div>
+    <div class="guide-body">
+      <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>Linux内核加密API（Crypto API）的核心接口与使用流程</li><li>如何为硬件加密引擎（如AES/SHA加速器）编写内核驱动</li><li>内核中实现数据完整性保护与密钥管理的基本方法</li></ul></div>
+      <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">Crypto API</span><span class="guide-concept-tag">硬件加密引擎</span></div>
+    </div>
+</div>
+
+<p>你的嵌入式设备需要加密存储用户数据，或者网络芯片需要硬件加速的SSL/TLS。直接调用用户态的OpenSSL？性能开销和上下文切换会让你望而却步。Linux内核提供了一套完整的加密框架——Crypto API，它允许驱动直接在内核空间高效、安全地使用软件或硬件加密服务。</p>
+
+<div class="key-point">
+<h4>为什么需要内核加密？</h4>
+<p>用户态加密库数据需要多次在用户空间和内核空间之间拷贝，对于网络数据包加密或块设备全盘加密这类高频操作，性能损耗巨大。内核加密实现了“零拷贝”或最少拷贝，并且是许多内核子系统（如DM-Crypt、IPsec）的基石。</p>
+</div>
+
+<h3>33.1 内核加密框架（Crypto API）全景</h3>
+<p>Crypto API是一个分层、抽象的框架。它向上对内核其他模块（如网络栈、文件系统）提供统一的加密接口，向下管理并调度各种加密算法实现，无论是纯软件的（如ARMv8的CRC指令优化），还是特定硬件的（如NXP的CAAM、Intel的QAT）。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">内核子系统<br/>(IPsec, DM-Crypt)</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node secondary">Crypto API<br/>核心层</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node accent">算法实现层<br/>(软件/硬件)</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↗</span><span class="arch-connector">↘</span></div>
+  <div class="arch-row">
+    <div class="arch-node primary">异步接口</div>
+    <span class="arch-connector">⇄</span>
+    <div class="arch-node accent">同步接口</div>
+  </div>
+</div>
+
+<p>对于驱动开发者，我们主要与“算法实现层”打交道，目标是向Crypto API注册一个硬件加密设备的驱动。这里有两个关键概念：<strong>转换（Transform）</strong>和<strong>算法（Algorithm）</strong>。</p>
+
+<div class="concept-block">
+<h4>生活类比</h4>
+<p><strong>转换（Transform）</strong>：就像一个多功能厨房料理机（硬件），它提供“搅拌”、“切碎”、“榨汁”等具体功能。<strong>算法（Algorithm）</strong>：就是“搅拌”这个功能本身，它有明确的输入（食材）、输出（糊状物）和操作规范。</p>
+<p><strong>技术定义</strong>：一个<code>crypto_alg</code>结构体描述了一个加密算法（如AES-CBC）的属性和函数指针。一个硬件设备可能实现多个算法，注册多个<code>crypto_alg</code>实例。</p>
+</div>
+
+<h3>33.2 编写一个硬件加密引擎驱动</h3>
+<p>假设我们为一块集成了AES-256-GCM和SHA-256加速器的SoC（例如NXP i.MX8QM的CAAM模块）编写驱动。整个过程遵循标准的内核驱动模型。</p>
+
+<div class="flowchart">
+  <div class="flow-step">探测设备<br/>(probe)</div><span class="flow-arrow">→</span>
+  <div class="flow-step">初始化硬件<br/>与DMA</div><span class="flow-arrow">→</span>
+  <div class="flow-step">填充并注册<br/>crypto_alg</div><span class="flow-arrow">→</span>
+  <div class="flow-step">实现算法<br/>回调函数</div>
+</div>
+
+<p>首先，你需要定义并填充算法描述结构。这是驱动的核心数据结构。</p>
+
+<pre><code><span class="cmt">// 定义AES-256-GCM算法</span>
+<span class="kw">static struct</span> aead_alg my_aes_gcm_alg = {
+    .base = {
+        .cra_name = <span class="str">"gcm(aes)"</span>,
+        .cra_driver_name = <span class="str">"gcm-aes-myhw"</span>,
+        .cra_priority = <span class="num">300</span>, <span class="cmt">// 硬件加速优先级高于软件(100)</span>
+        .cra_module = THIS_MODULE,
+        .cra_blocksize = <span class="num">1</span>,
+        .cra_ctxsize = <span class="kw">sizeof</span>(<span class="kw">struct</span> my_hw_ctx),
+    },
+    .ivsize = GCM_AES_IV_SIZE,
+    .maxauthsize = AES_BLOCK_SIZE,
+    .setkey = my_aes_gcm_setkey, <span class="cmt">// 设置密钥</span>
+    .setauthsize = my_aes_gcm_setauthsize,
+    .encrypt = my_aes_gcm_encrypt, <span class="cmt">// 加密</span>
+    .decrypt = my_aes_gcm_decrypt, <span class="cmt">// 解密</span>
+    .init = my_aes_gcm_init,
+    .exit = my_aes_gcm_exit,
+};</code></pre>
+
+<p><code>cra_priority</span>是关键参数。当多个算法（如软件AES和你的硬件AES）同名时，内核选择优先级高的。硬件驱动通常设为200-400，确保被优先使用。</p>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区</h4>
+<ul>
+<li><strong>混淆算法名与驱动名</strong>：<code>cra_name</code>是标准算法名（如“cbc(aes)”），用户通过它请求服务；<code>cra_driver_name</code>是你的驱动唯一标识。把驱动名当算法名注册会导致<code>crypto_alloc_aead</code>失败。</li>
+<li><strong>忽视异步操作</strong>：硬件加密通常是异步的（触发后立即返回，通过中断或轮询得知完成）。必须在回调函数中正确调用<code>aead_request_complete</code>来通知上层请求完成，否则调用方会永远阻塞。</li>
+<li><strong>密钥管理不当</strong>：在<code>setkey</code>回调中，必须将用户提供的密钥拷贝到驱动内部结构或硬件寄存器。直接保存用户空间指针是严重的安全漏洞和内核Oops的根源。</li>
+</ul>
+</div>
+
+<p>在驱动的<code>probe</code>函数中，你需要注册这个算法：</p>
+<pre><code><span class="kw">int</span> <span class="func">my_hw_probe</span>(<span class="kw">struct</span> platform_device *pdev) {
+    ...
+    <span class="kw">int</span> ret = crypto_register_aead(&my_aes_gcm_alg);
+    <span class="kw">if</span> (ret) {
+        dev_err(&pdev->dev, <span class="str">"Failed to register AES-GCM: %d\n"</span>, ret);
+        <span class="kw">return</span> ret;
+    }
+    <span class="cmt">// 同样注册SHA-256算法: crypto_register_ahash()</span>
+    ...
+}</code></pre>
+
+<h3>33.3 实战：在内核驱动中使用加密服务</h3>
+<p>你的另一个驱动（比如一个存储驱动）需要加密数据，可以直接调用Crypto API，而无需关心底层是硬件还是软件实现。</p>
+
+<div class="scenario-grid">
+    <div class="scenario-card blue"><h4>场景：加密写入的数据块</h4><ul><li>使用对称加密（如AES-CBC）</li><li>流程：分配转换对象 -> 设置密钥 -> 执行加密</li></ul></div>
+    <div class="scenario-card green"><h4>场景：计算文件哈希</h4><ul><li>使用散列算法（如SHA-256）</li><li>用于数据完整性校验</li></ul></div>
+    <div class="scenario-card purple"><h4>场景：网络包认证</h4><ul><li>使用AEAD模式（如AES-GCM）</li><li>同时提供加密和完整性保护</li></ul></div>
+</div>
+
+<p>下面是一个在驱动函数中使用AES-CBC加密一段内存的典型代码片段：</p>
+<pre><code><span class="kw">#include</span> <span class="str"><linux/crypto.h></span>
+<span class="kw">#include</span> <span class="str"><linux/scatterlist.h></span>
+
+<span class="kw">int</span> <span class="func">my_driver_encrypt_block</span>(<span class="kw">const</span> <span class="kw">u8</span> *key, <span class="kw">const</span> <span class="kw">u8</span> *iv, <span class="kw">const</span> <span class="kw">u8</span> *plain, <span class="kw">u8</span> *cipher, <span class="kw">size_t</span> len) {
+    <span class="kw">struct</span> crypto_skcipher *tfm = NULL;
+    <span class="kw">struct</span> skcipher_request *req = NULL;
+    <span class="kw">struct</span> scatterlist src_sg, dst_sg;
+    <span class="kw">int</span> ret = <span class="num">0</span>;
+
+    <span class="cmt">// 1. 分配转换对象（“料理机”）</span>
+    tfm = crypto_alloc_skcipher(<span class="str">"cbc(aes)"</span>, <span class="num">0</span>, <span class="num">0</span>);
+    <span class="kw">if</span> (IS_ERR(tfm)) { ret = PTR_ERR(tfm); <span class="kw">goto</span> out; }
+
+    <span class="cmt">// 2. 设置密钥（“放入食谱”）</span>
+    ret = crypto_skcipher_setkey(tfm, key, <span class="num">32</span>); <span class="cmt">// AES-256密钥长度32字节</span>
+    <span class="kw">if</span> (ret) { <span class="kw">goto</span> out_tfm; }
+
+    <span class="cmt">// 3. 创建并配置请求</span>
+    req = skcipher_request_alloc(tfm, GFP_KERNEL);
+    skcipher_request_set_callback(req, <span class="num">0</span>, NULL, NULL);
+    sg_init_one(&src_sg, plain, len);
+    sg_init_one(&dst_sg, cipher, len);
+    skcipher_request_set_crypt(req, &src_sg, &dst_sg, len, iv);
+
+    <span class="cmt">// 4. 执行加密操作（同步方式）</span>
+    ret = crypto_skcipher_encrypt(req);
+
+    skcipher_request_free(req);
+out_tfm:
+    crypto_free_skcipher(tfm);
+out:
+    <span class="kw">return</span> ret;
+}</code></pre>
+
+<p>我在一个基于i.MX6UL的项目中踩过坑：<code>crypto_alloc_skcipher</code>返回<code>-ENOENT</code>。排查后发现内核配置中<code>CONFIG_CRYPTO_AES</code>和<code>CONFIG_CRYPTO_CBC</code>没有启用，导致算法不存在。务必检查内核的<code>.config</code>文件。</p>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：处理大量数据或频繁操作时，考虑使用异步接口和DMA，这与第21章《DMA引擎驱动》中描述的原则一致。异步加密可以避免阻塞进程，提升系统整体吞吐量。</p>
+</div>
+
+<h3>33.4 内核密钥保留服务与完整性校验</h3>
+<p>密钥不能硬编码在驱动代码里。Linux内核提供了密钥保留服务（Key Retention Service），允许安全地生成、存储和使用密钥。</p>
+
+<table>
+<caption>内核主要加密服务与API速查表</caption>
+<thead>
+<tr><th>算法类型</th><th>API头文件</th><th>分配函数</th><th>典型算法字符串</th><th>硬件优先级建议</th></tr>
+</thead>
+<tbody>
+<tr><td>对称加密 (skcipher)</td><td><code><linux/crypto.h></code></td><td><code>crypto_alloc_skcipher()</code></td><td><code>"ecb(aes)"</code>, <code>"cbc(aes)"</code></td><td>300</td></tr>
+<tr><td>AEAD (认证加密)</td><td><code><crypto/aead.h></code></td><td><code>crypto_alloc_aead()</code></td><td><code>"gcm(aes)"</code>, <code>"ccm(aes)"</code></td><td>350</td></tr>
+<tr><td>哈希 (ahash)</td><td><code><crypto/hash.h></code></td><td><code>crypto_alloc_ahash()</code></td><td><code>"sha256"</code>, <code>"sm3"</code></td><td>250</td></tr>
+<tr><td>随机数 (rng)</td><td><code><crypto/rng.h></code></td><td><code>crypto_alloc_rng()</code></td><td><code>"stdrng"</code></td><td>N/A</td></tr>
+</tbody>
+</table>
+
+<p>除了加密，数据完整性同样重要。例如，确保固件镜像在加载前未被篡改。你可以使用内核的<code>crypto_shash_*</code> API计算SHA-256哈希，并与预置的合法哈希值比对。</p>
+
+<div class="key-point">
+<h4>实际开发中的选择</h4>
+<p>大部分团队对于固件校验会在驱动加载早期（<code>probe</code>阶段）使用同步的<code>crypto_shash</code>计算哈希，因为此时数据量不大且操作一次性。对于传输中的数据流（如网络驱动），则会注册并使用异步的<code>ahash</code>接口，并配合DMA。</p>
+</div>
+
+<p>一个常见的完整性校验错误是忽略了哈希值的比较需要是<strong>常数时间</strong>的。使用简单的<code>memcmp</code>可能会被时序攻击推测出差异位置。内核提供了<code>crypto_memneq</code>函数用于安全比较。</p>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1. <strong>环境准备</strong>：在QEMU模拟的ARM64虚拟机（或你的开发板）上，确保内核配置启用了<code>CONFIG_CRYPTO_USER_API_SKCIPHER</code>和<code>CONFIG_CRYPTO_AES</code>。<br/>
+2. <strong>编写测试模块</strong>：创建一个内核模块，在<code>init</code>函数中调用<code>crypto_alloc_skcipher("ecb(aes)", 0, 0)</code>，如果成功，打印算法驱动名（通过<code>crypto_skcipher_driver_name</code>获取）和优先级，然后释放它。<br/>
+3. <strong>观察输出</strong>：加载模块，查看<code>dmesg</code>。你会看到类似“<code>ecb-aes-aes-generic</code>”或“<code>ecb-aes-caam</code>”的名字，这取决于你的系统使用的是软件实现还是硬件实现。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>当内核中同时存在软件实现的“sha256”和你的硬件实现的“sha256”时，Crypto API默认会使用哪一个？由什么参数控制？</li>
+<li>在硬件加密驱动的<code>encrypt</code>回调函数中，加密操作完成后，<strong>必须</strong>调用哪个关键函数来通知请求完成？</li>
+<li>如果你的驱动需要使用一个128位的密钥，你在<code>setkey</code>回调中，应该直接从用户提供的<code>key</code>指针读取，还是先进行拷贝？为什么？</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li>Linux内核Crypto API提供了统一的加密服务抽象层，驱动开发者通过注册<code>crypto_alg</code>结构体将硬件加密引擎接入系统。</li>
+<li>编写硬件加密驱动需实现算法描述结构（如<code>aead_alg</code>）并注册，关键步骤包括设备探测、硬件初始化、设置算法优先级和实现异步操作回调。</li>
+<li>在内核其他驱动中，可以通过<code>crypto_alloc_xxx()</code>、<code>setkey()</code>、<code>encrypt()</code>等标准流程使用加密服务，无需感知底层实现细节。</li>
+<li>安全编程至关重要，需避免密钥管理漏洞，对完整性校验使用常数时间比较，并合理选择同步/异步接口以平衡性能与复杂度。</li>
+</ul>
+</div>
+
+</div>
+        
+        <div class="chapter-nav">
+            <a href="32.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="34.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第33章 —</div>
+    </div>
+</body>
+</html>

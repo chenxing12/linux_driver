@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第28章 内核工作队列机制</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第28章 内核工作队列机制</h2></div>
+
+<div class="chapter-guide">
+  <div class="guide-meta">
+    <span class="guide-meta-item"><span class="difficulty-tag diff-intermediate">进阶</span></span>
+    <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握内核定时器，需要处理耗时或可延迟任务的驱动开发者</span>
+    <span class="guide-meta-item"><span class="meta-icon">🔧</span> 将中断下半部、定时任务或异步处理卸载到内核线程池执行</span>
+  </div>
+  <div class="guide-body">
+    <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>工作队列（workqueue）的核心机制与两种创建方式</li><li>工作（work）、工作队列（workqueue）与工作者线程（worker）的关系</li><li>延迟工作（delayed_work）与工作队列刷新、取消等高级操作</li></ul></div>
+    <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">工作队列</span><span class="guide-concept-tag">工作者线程</span></div>
+  </div>
+</div>
+
+<p>一个真实的故障现象：某个触摸屏驱动在中断处理函数里进行复杂的坐标校准计算，导致系统响应变慢，甚至偶尔出现“soft lockup”警告。中断上下文要求快速返回，不能睡眠，也不能进行可能阻塞的操作。这时，你需要一个机制，把耗时的任务“挪出去”执行。内核工作队列就是为解决这类问题而生的。</p>
+
+<div class="concept-block">
+<p><strong>生活类比：</strong> 就像餐厅的后厨。顾客点单（中断发生）非常急迫，服务员（中断处理程序）立刻接下订单，但复杂的炒菜工作（耗时任务）会被写成菜单（工作项）贴到后厨的公告板（工作队列）上，由专门的厨师（工作者线程）来按顺序处理。</p>
+<p><strong>技术定义：</strong> 工作队列（workqueue）是Linux内核用于将任务（工作）的执行推迟到进程上下文的一种异步执行框架。它创建内核线程（工作者线程）来从队列中取出工作项并执行，允许任务睡眠、使用信号量等。</p>
+</div>
+
+<h3>工作队列的两种创建方式与选择</h3>
+<p>内核提供了两种使用工作队列的路径：共享的全局工作队列和自定义的专用工作队列。选择哪一种，直接关系到驱动的性能和资源隔离性。</p>
+
+<table>
+<thead><tr><th>对比项</th><th>共享工作队列 (keventd_wq)</th><th>自定义工作队列</th></tr></thead>
+<tbody>
+<tr><td><strong>创建方式</strong></td><td>使用 <code>schedule_work(&my_work)</code></td><td>使用 <code>create_workqueue(“my_queue”)</code></td></tr>
+<tr><td><strong>资源开销</strong></td><td>零开销，使用内核预创建线程池</td><td>需要为每个CPU核心创建专属内核线程</td></tr>
+<tr><td><strong>执行延迟</strong></td><td>可能较高，需与系统其他任务排队</td><td>较低，独占线程，响应及时</td></tr>
+<tr><td><strong>隔离性</strong></td><td>无隔离，一个任务阻塞可能影响其他驱动</td><td>强隔离，一个队列阻塞不影响其他</td></tr>
+<tr><td><strong>适用场景</strong></td><td>任务不频繁、执行快、不阻塞的轻量级任务</td><td>任务频繁、耗时、可能阻塞或要求低延迟的任务</td></tr>
+</tbody>
+</table>
+
+<p>我的经验是，对于99%的驱动场景，使用共享工作队列就足够了。除非你像开发一个高性能存储驱动，需要频繁提交大量I/O完成处理工作，否则创建自定义工作队列带来的复杂性往往得不偿失。内核默认的共享工作队列线程名为`kworker/uX:Y`，你可以用`ps aux | grep kworker`查看。</p>
+
+<h3>核心数据结构与执行流程</h3>
+<p>理解工作队列，需要抓住三个核心：<strong>工作（struct work_struct）</strong>、<strong>工作队列（struct workqueue_struct）</strong>和<strong>工作者线程</strong>。它们的关系构成了完整的执行链路。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">驱动模块</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node secondary">初始化工作</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node accent">提交工作</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node primary">共享工作队列<br/>(keventd_wq)</div>
+    <span class="arch-connector">⇄</span>
+    <div class="arch-node accent">工作者线程池<br/>(kworker)</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node secondary">工作处理函数<br/>(在进程上下文执行)</div>
+  </div>
+</div>
+
+<p>一个典型的工作提交与执行流程如下：</p>
+<div class="flowchart">
+  <div class="flow-step">定义工作结构体与处理函数</div><span class="flow-arrow">→</span>
+  <div class="flow-step">初始化工作（INIT_WORK）</div><span class="flow-arrow">→</span>
+  <div class="flow-step">在合适时机提交工作（schedule_work）</div><span class="flow-arrow">→</span>
+  <div class="flow-step">内核线程从队列取出并执行</div><span class="flow-arrow">→</span>
+  <div class="flow-step">函数执行完毕，工作项从队列移除</div>
+</div>
+
+<p>让我们看一个最基础的代码示例，它在中断处理函数中调度一个工作：</p>
+<pre><code><span class="cmt">// 1. 定义工作结构体和工作处理函数</span>
+<span class="kw">static struct</span> work_struct my_work;
+<span class="kw">static void</span> <span class="func">my_work_handler</span>(<span class="kw">struct</span> work_struct *work) {
+    <span class="func">printk</span>(KERN_INFO <span class="str">"Work handler is running in process context, pid: %d\n"</span>, <span class="func">current</span>->pid);
+    <span class="cmt">// 这里可以调用可能睡眠的函数，如 kmalloc(GFP_KERNEL)</span>
+}
+
+<span class="cmt">// 2. 在驱动初始化函数中初始化工作</span>
+<span class="kw">static int</span> __init <span class="func">my_init</span>(<span class="kw">void</span>) {
+    <span class="func">INIT_WORK</span>(&my_work, my_work_handler);
+    <span class="cmt">// ... 其他初始化，如申请中断</span>
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+
+<span class="cmt">// 3. 中断处理函数（上半部）</span>
+<span class="kw">static irqreturn_t</span> <span class="func">my_interrupt</span>(<span class="kw">int</span> irq, <span class="kw">void</span> *dev_id) {
+    <span class="cmt">// 快速处理硬件相关操作</span>
+    <span class="func">clear_interrupt_flag</span>();
+
+    <span class="cmt">// 将耗时任务调度到工作队列</span>
+    <span class="func">schedule_work</span>(&my_work);
+    <span class="kw">return</span> IRQ_HANDLED;
+}</code></pre>
+
+<div class="key-point">
+<p><strong>关键点：</strong> 工作处理函数 `my_work_handler` 运行在进程上下文，其 `current` 宏指向的是 `kworker` 内核线程，而不是触发中断的用户进程。这意味着你不能直接通过 `current` 来访问用户空间数据。</p>
+</div>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区</h4>
+<ul>
+<li><strong>在工作函数中访问用户空间：</strong> 工作函数由内核线程执行，与触发中断的用户进程无关联，直接 `copy_from_user` 会导致内核崩溃。需要在中断上半部将用户数据保存到内核空间。</li>
+<li><strong>误用 `INIT_WORK` 导致重复初始化：</strong> 一个 `work_struct` 只能被初始化一次。如果工作已经在队列中 pending，再次调用 `INIT_WORK` 是危险的操作。通常只在模块初始化时调用一次。</li>
+<li><strong>认为 `schedule_work` 会立即执行：</strong> 它只是将工作项放入队列并唤醒一个工作者线程。执行是异步的，可能有毫秒级的延迟，具体取决于系统负载。</li>
+</ul>
+</div>
+
+<h3>延迟工作与更精细的控制</h3>
+<p>有时你不仅想把任务推迟到进程上下文，还想让它延迟一段时间再执行。这就是 `delayed_work` 的用途。它内部包含一个 `work_struct` 和一个定时器。</p>
+
+<pre><code><span class="kw">#include</span> <span class="str">&lt;linux/delay.h&gt;</span>
+<span class="kw">static struct</span> delayed_work my_delayed_work;
+
+<span class="kw">static void</span> <span class="func">delayed_handler</span>(<span class="kw">struct</span> work_struct *work) {
+    <span class="func">printk</span>(KERN_INFO <span class="str">"Delayed work executed after 2 seconds.\n"</span>);
+}
+
+<span class="cmt">// 初始化延迟工作</span>
+<span class="func">INIT_DELAYED_WORK</span>(&my_delayed_work, delayed_handler);
+
+<span class="cmt">// 调度延迟工作，2000毫秒后执行</span>
+<span class="func">schedule_delayed_work</span>(&my_delayed_work, <span class="func">msecs_to_jiffies</span>(<span class="num">2000</span>));</code></pre>
+
+<p>对于自定义工作队列，你拥有更强的控制力，比如创建、刷新和销毁。刷新操作 (`flush_workqueue`) 会阻塞当前进程，直到该队列中所有已提交的工作执行完毕。这在模块卸载时确保没有残留工作正在运行至关重要。</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>场景：网络数据包后处理</h4><ul><li>网卡中断收到数据包。</li><li>中断上半部快速将数据包DMA到内存环。</li><li>调度一个工作到自定义工作队列 `net_rx_wq` 进行协议栈处理（如IP分片重组）。</li></ul></div>
+  <div class="scenario-card green"><h4>场景：传感器数据批量上报</h4><ul><li>传感器每10ms产生一次中断。</li><li>中断中读取原始数据存入缓冲区。</li><li>调度一个延迟工作，200ms后执行，对缓冲区的所有数据进行滤波、校准后一次性上报给用户层。</li></ul></div>
+  <div class="scenario-card purple"><h4>场景：硬件初始化探活</h4><ul><li>驱动加载时，硬件可能未就绪。</li><li>调度一个延迟工作，5秒后执行。</li><li>在工作函数中检查硬件状态，若未就绪则尝试重新初始化或报错。</li></ul></div>
+</div>
+
+<div class="editor-note">
+<p><strong>编者提示：</strong> 工作队列经常与第27章介绍的<strong>内核定时器</strong>进行比较。核心区别在于执行上下文：定时器回调在中断上下文执行，不能睡眠；工作队列函数在进程上下文执行，可以睡眠。对于需要获取锁或分配内存的延迟任务，工作队列是更安全的选择。</p>
+</div>
+
+<p>在实际项目中，我遇到过一个坑：使用 `schedule_delayed_work` 实现一个轮询任务，但在模块退出函数中只调用了 `cancel_delayed_work`。结果模块卸载后，之前调度的延迟工作有时仍会执行，导致访问已释放的内存而oops。正确的做法是使用 `cancel_delayed_work_sync`，它会取消并等待可能正在运行的工作完成。</p>
+
+<h3>工作队列的内部优化：并发管理队列（CMWQ）</h3>
+<p>在较新的内核版本（2.6.36之后），工作队列机制被重写为并发管理队列（Concurrency Managed Workqueue, CMWQ）。它自动管理工作者线程的数量和并发度，开发者无需关心。但你需要了解两个关键概念：</p>
+<ul>
+<li><strong>WQ_UNBOUND：</strong> 创建的工作者线程不绑定到特定CPU，可以在CPU间迁移，适用于CPU密集型且不关心缓存局部性的任务。</li>
+<li><strong>WQ_HIGHPRI：</strong> 高优先级工作队列，其工作者线程以更高的调度优先级运行（`MAX_RT_PRIO/2`），适用于低延迟要求的任务。</li>
+</ul>
+<p>创建具有这些属性的自定义工作队列：</p>
+<pre><code><span class="kw">struct</span> workqueue_struct *my_wq;
+my_wq = <span class="func">alloc_workqueue</span>(<span class="str">"my_highpri_wq"</span>, WQ_HIGHPRI | WQ_UNBOUND, <span class="num">0</span>);
+<span class="cmt">// 向该队列提交工作
+// queue_work(my_wq, &my_work);</span></code></pre>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1.  <strong>基础实验：</strong> 编写一个内核模块，在初始化时调度一个延迟工作，5秒后向内核日志打印“Hello from delayed work!”。观察 `dmesg` 输出，并使用 `ps` 命令查看执行此工作的 `kworker` 线程。</p>
+<p>2.  <strong>进阶实验：</strong> 修改上述模块，在中断处理函数中（可以模拟一个定时器中断或使用一个GPIO中断）调度一个普通工作。在工作处理函数中，尝试调用 `msleep(100)`，验证其可以睡眠。对比一下，如果把这个 `msleep` 放在中断上半部会发生什么？</p>
+<p>3.  <strong>排错实验：</strong> 故意在工作处理函数中加入一个错误：`*(int *)0 = 1;` 制造一个内核oops。分析oops信息，看看崩溃发生在哪个进程上下文（`kworker` 线程），并与直接在中断处理函数中制造oops的情况进行对比。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>在中断上半部，能否调用 `schedule_work()`？为什么？</li>
+<li>`schedule_work()` 和 `queue_work()` 的主要区别是什么？</li>
+<li>当模块的退出函数被调用时，如何确保所有由该模块调度出去的工作都已经执行完毕或取消？请写出关键的函数调用序列。</li>
+<li>一个工作处理函数执行时间过长（例如循环1秒），会对系统其他部分造成什么影响？（提示：考虑共享队列和自定义队列的区别）</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li>工作队列是将任务延迟到<strong>进程上下文</strong>执行的核心机制，解决了中断上下文不能睡眠和耗时的问题。</li>
+<li>优先使用<strong>共享工作队列</strong>（`schedule_work`）处理轻量级任务；仅在任务频繁、耗时或需隔离时创建<strong>自定义工作队列</strong>。</li>
+<li>掌握<strong>延迟工作</strong>（`delayed_work`）用于定时调度，并在模块清理时使用 `*_sync` 系列函数确保工作完成，防止访问释放的内存。</li>
+<li>工作处理函数中<strong>不能直接访问用户空间内存</strong>，数据传递需在内核空间完成。</li>
+<li>理解CMWQ模型下的 `WQ_UNBOUND` 和 `WQ_HIGHPRI` 标志，用于优化CPU绑定和任务优先级。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="27.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="29.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第28章 —</div>
+    </div>
+</body>
+</html>

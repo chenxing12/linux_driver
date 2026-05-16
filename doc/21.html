@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第21章 DMA引擎驱动</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第21章 DMA引擎驱动</h2></div>
+
+<div class="chapter-guide">
+    <div class="guide-meta">
+      <span class="guide-meta-item"><span class="difficulty-tag diff-intermediate">进阶</span></span>
+      <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握中断、内存分配，需要实现高性能数据传输的开发者</span>
+      <span class="guide-meta-item"><span class="meta-icon">🔧</span> 为网卡、声卡、图像传感器等设备编写高速数据搬运驱动</span>
+    </div>
+    <div class="guide-body">
+      <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>理解DMA引擎框架（dmaengine）的核心数据结构与API</li><li>掌握配置和发起一次DMA传输的完整流程</li><li>学会处理DMA传输完成中断与异步回调</li></ul></div>
+      <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">分散/聚集 (Scatter/Gather)</span><span class="guide-concept-tag">传输描述符</span></div>
+    </div>
+</div>
+
+<p>你的网卡每秒要接收数百万个网络数据包，如果每个字节都让CPU来搬运，它早就累趴下了。这就像让公司CEO亲自去搬每一箱快递，效率极低。DMA（Direct Memory Access，直接内存访问）就是专门雇来的“快递员”，它能在CPU不干预的情况下，在设备和内存之间直接搬运数据。本章，我们深入Linux内核的dmaengine框架，看看如何驱动这位“超级快递员”。</p>
+
+<h3>21.1 DMA引擎框架：谁是老板，谁是员工</h3>
+<p>内核的dmaengine框架采用“生产者-消费者”模型进行抽象。你的设备驱动是“消费者”，它提出搬运需求（比如，把A处的1000字节搬到B处）。而SoC内部实际的DMA控制器硬件是“生产者”，它提供搬运能力。框架本身是“中介”，负责匹配需求与能力，并管理订单。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">消费者驱动<br>(如网卡驱动)</div>
+    <span class="arch-connector">→<br>提交请求</span>
+    <div class="arch-node secondary">DMA引擎框架<br>(dmaengine)</span></div>
+    <span class="arch-connector">→<br>分配通道</span>
+    <div class="arch-node accent">DMA控制器驱动<br>(如pl330驱动)</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓<br>回调通知</span></div>
+  <div class="arch-row">
+    <div class="arch-node primary">内存/外设</div>
+    <span class="arch-connector">⇄<br>直接搬运</span>
+    <div class="arch-node accent">DMA硬件</div>
+  </div>
+</div>
+
+<p>这个框架的核心是几个关键数据结构。首先，<code><span class="kw">struct dma_device</span></code>代表一个DMA控制器（比如TI的EDMA或ARM的PL330），它由控制器驱动注册。一个控制器可以有多个通道（<code><span class="kw">struct dma_chan</span></code>），每个通道独立执行传输任务。你的设备驱动需要申请一个通道，然后通过<code><span class="kw">struct dma_async_tx_descriptor</span></code>（传输描述符）来描述一次具体的传输。</p>
+
+<div class="key-point">
+<h4>关键点：为什么需要Scatter/Gather？</h4>
+<p>想象你要搬运的不是一整块连续内存，而是分散在物理内存各处的多个数据块（例如，一个网络数据包被拆分到多个SKB缓冲区）。Scatter/Gather（SG）DMA允许你用一个链表描述这些分散的块，DMA控制器能自动地依次搬运它们，这对处理网络数据流和文件I/O至关重要。在项目中，我常用它来处理摄像头传感器输出的非连续图像帧缓冲区。</p>
+</div>
+
+<h3>21.2 发起一次DMA传输：四步流程</h3>
+<p>发起一次DMA传输，就像通过外卖平台点餐，有固定的步骤。下面这个流程适用于大多数内存到内存或内存到设备的传输。</p>
+
+<div class="flowchart">
+  <div class="flow-step">1. 申请通道</div><span class="flow-arrow">→</span>
+  <div class="flow-step">2. 准备描述符</div><span class="flow-arrow">→</span>
+  <div class="flow-step">3. 提交并触发</div><span class="flow-arrow">→</span>
+  <div class="flow-step">4. 等待回调</div>
+</div>
+
+<p>我们来拆解每一步的代码实现。假设我们要从一块内核缓冲区<code>src</code>搬运<code>len</code>字节数据到设备（例如一个FIFO寄存器）。</p>
+
+<pre><code><span class="cmt">/* 步骤1 & 2: 申请通道并准备描述符 */</span>
+<span class="kw">struct</span> dma_chan *chan;
+<span class="kw">struct</span> dma_async_tx_descriptor *desc;
+<span class="kw">dma_cookie_t</span> cookie;
+
+<span class="cmt">// 通过设备树或名称申请通道。实际开发中，更推荐用设备树匹配。</span>
+chan = dma_request_chan(&amp;your_device, <span class="str">"tx"</span>);
+<span class="kw">if</span> (IS_ERR(chan)) {
+    <span class="cmt">// 错误处理...</span>
+}
+
+<span class="cmt">// 配置传输参数：源地址、目标地址、方向、长度</span>
+<span class="kw">struct</span> dma_slave_config config = {
+    .direction = DMA_MEM_TO_DEV,
+    .dst_addr = your_device_fifo_phys_addr, <span class="cmt">// 设备物理地址</span>
+    .dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES, <span class="cmt">// 总线宽度，例如32位</span>
+};
+dmaengine_slave_config(chan, &amp;config);
+
+<span class="cmt">// 准备描述符。src是内核虚拟地址，框架会处理虚拟到物理的转换。</span>
+desc = dmaengine_prep_slave_single(chan, src, len, DMA_MEM_TO_DEV, <span class="num">0</span>);
+<span class="kw">if</span> (!desc) {
+    <span class="cmt">// 错误处理...</span>
+}</code></pre>
+
+<p>这里有个隐藏的坑：<code>dst_addr</code>必须是<strong>设备的物理地址</strong>，而不是IO映射后的虚拟地址（ioremap得到的结果）。我在一个音频驱动项目里踩过这个坑，错误配置导致数据全写到了未知的内存区域。</p>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区</h4>
+<ul>
+<li><strong>地址混淆</strong>：为DMA配置的地址必须是CPU物理地址或设备总线地址，不能直接使用内核虚拟地址（kmalloc返回的）或ioremap的地址。需要使用<code>dma_map_single()</code>等API进行映射。</li>
+<li><strong>缓存一致性</strong>：如果源或目标内存是可缓存的（Cacheable），必须在传输前后调用<code>dma_sync_*</code>系列函数同步缓存，否则会读到脏数据或数据丢失。这是最易出错的地方之一。</li>
+<li><strong>忘记释放</strong>：传输完成后，不仅要释放DMA通道（<code>dma_release_channel</code>），如果之前使用了<code>dma_alloc_coherent</span></code>分配了专用缓冲区，也必须对应释放。</li>
+</ul>
+</div>
+
+<p>继续完成后续步骤。我们需要设置一个回调函数，在传输完成后被调用，然后提交并启动传输。</p>
+
+<pre><code><span class="cmt">/* 步骤3 & 4: 设置回调、提交并等待 */</span>
+<span class="kw">void</span> <span class="func">dma_callback_func</span>(<span class="kw">void</span> *data) {
+    <span class="kw">struct</span> completion *dma_complete = data;
+    complete(dma_complete);
+    printk(KERN_INFO <span class="str">"DMA transfer completed.\n"</span>);
+}
+
+<span class="kw">DECLARE_COMPLETION</span>(dma_complete);
+desc->callback = dma_callback_func;
+desc->callback_param = &amp;dma_complete;
+
+<span class="cmt">// 提交传输，获取一个cookie用于跟踪</span>
+cookie = dmaengine_submit(desc);
+<span class="kw">if</span> (dma_submit_error(cookie)) {
+    <span class="cmt">// 错误处理...</span>
+}
+
+<span class="cmt">// 触发DMA控制器开始执行这个描述符</span>
+dma_async_issue_pending(chan);
+
+<span class="cmt">// 等待传输完成。这里也可以用中断，而不是忙等待。</span>
+wait_for_completion_timeout(&amp;dma_complete, msecs_to_jiffies(<span class="num">1000</span>));</code></pre>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：回调函数中使用的<code>complete()</code>机制，是内核中常见的同步方式。如果你想深入了解内核中其他同步原语如信号量、互斥锁、等待队列的工作原理，可以回顾<a href="#">第3章：并发控制与同步机制</a>。</p>
+</div>
+
+<h3>21.3 关键API与缓冲区管理</h3>
+<p>DMA驱动开发中，选择正确的缓冲区分配和管理API至关重要。下表对比了三种主要方式：</p>
+
+<table>
+<thead>
+<tr><th>API</th><th>适用场景</th><th>缓存一致性</th><th>分配开销</th><th>示例代码片段</th></tr>
+</thead>
+<tbody>
+<tr><td><code>dma_alloc_coherent</code></td><td>需要长期存在的DMA缓冲区（如设备描述符环）</td><td>一致性映射，无需手动同步</td><td>高</td><td><code>buf = dma_alloc_coherent(dev, size, &amp;dma_handle, GFP_KERNEL);</code></td></tr>
+<tr><td><code>dma_map_single</code>/<code>dma_unmap_single</code></td><td>临时使用已有的普通内核缓冲区（如<code>kmalloc</code>分配）</td><td>流式映射，<strong>必须</strong>手动同步缓存</td><td>低</td><td><code>dma_addr = dma_map_single(dev, kernel_buf, len, dir);</code></td></tr>
+<tr><td><code>dma_pool_alloc</code></td><td>需要分配大量小尺寸的DMA对象（如网络驱动中的描述符）</td><td>取决于池的创建方式</td><td>中</td><td><code>buf = dma_pool_alloc(desc_pool, GFP_ATOMIC, &amp;dma_handle);</code></td></tr>
+</tbody>
+</table>
+
+<p>我的经验是，对于高性能、数据频繁更新的场景（如网卡收发数据），使用<code>dma_alloc_coherent</code>最省心，但代价是可能损失一些CPU缓存性能。对于控制结构或不常更新的数据，这是首选。对于从通用内存分配器（如SLAB）获得的缓冲区进行一次性传输，必须使用<code>dma_map_single</code>，并在传输后立即<code>dma_unmap_single</code>。</p>
+
+<div class="concept-block">
+<h4>生活类比：缓存一致性</h4>
+<p>假设CPU和DMA共享一个仓库（内存）。CPU有个手推车（缓存）用来临时存放常用货物。当CPU修改了仓库A区的货物，它可能只更新了手推车里的，仓库里的还没变（写缓存）。此时如果DMA直接从仓库A区搬运，搬走的就是旧货物。缓存同步操作（<code>dma_sync_single_for_device</code>）就是强制CPU把手推车里的新货物写回仓库，保证DMA拿到的是最新数据。</p>
+</div>
+
+<h3>21.4 实战：SG DMA传输示例</h3>
+<p>让我们看一个更复杂的Scatter/Gather DMA示例，这在网络驱动中处理数据包散列（skb->data_frag）时是标准操作。</p>
+
+<pre><code><span class="cmt">/* 假设我们有一个scatterlist数组sgl，包含nents个散列项 */</span>
+<span class="kw">struct</span> scatterlist sgl[<span class="num">MAX_ENTRIES</span>];
+<span class="kw">struct</span> dma_async_tx_descriptor *desc;
+<span class="kw">int</span> i, nents;
+
+<span class="cmt">// 1. 初始化scatterlist</span>
+sg_init_table(sgl, nents);
+<span class="kw">for</span> (i = <span class="num">0</span>; i &lt; nents; i++) {
+    <span class="cmt">// 假设pages[i]是包含数据的页面，offset是页内偏移，len是长度</span>
+    sg_set_page(&amp;sgl[i], pages[i], len, offset);
+}
+
+<span class="cmt">// 2. 映射SG列表，获取DMA地址</span>
+nents = dma_map_sg(dev, sgl, nents, DMA_TO_DEVICE);
+<span class="kw">if</span> (nents == <span class="num">0</span>) {
+    <span class="cmt">// 映射失败</span>
+}
+
+<span class="cmt">// 3. 准备SG DMA描述符</span>
+desc = dmaengine_prep_slave_sg(chan, sgl, nents, DMA_MEM_TO_DEV, DMA_PREP_INTERRUPT);
+<span class="kw">if</span> (!desc) {
+    dma_unmap_sg(dev, sgl, nents, DMA_TO_DEVICE);
+    <span class="cmt">// 错误处理...</span>
+}
+
+<span class="cmt">// 4. 设置回调、提交、触发（同单缓冲区示例）</span>
+desc->callback = my_callback;
+cookie = dmaengine_submit(desc);
+dma_async_issue_pending(chan);
+
+<span class="cmt">// 5. 在回调函数中，务必取消映射！</span>
+<span class="kw">void</span> <span class="func">my_callback</span>(<span class="kw">void</span> *data) {
+    dma_unmap_sg(dev, sgl, nents, DMA_TO_DEVICE);
+    <span class="cmt">// ... 其他后处理</span>
+}</code></pre>
+
+<p>如果你在驱动中看到<code>DMA-API: device driver tries to sync DMA memory it has not allocated</code>这类内核告警，大概率是映射（map）和取消映射（unmap）没有成对调用，或者传错了设备指针<code>dev</code>。</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>音频Codec驱动</h4><ul><li><strong>场景</strong>：将PCM音频数据从内存搬运到I2S TX FIFO。</li><li><strong>要点</strong>：使用循环双缓冲区（Ping-Pong Buffer）和SG DMA实现连续播放。配置DMA为循环模式（Cyclic Mode）。</li><li><strong>参数</strong>：数据宽度16/24位，主时钟（MCLK）通常为12.288MHz或11.2896MHz。</li></ul></div>
+  <div class="scenario-card green"><h4>MMC/SD卡驱动</h4><ul><li><strong>场景</strong>：读写SD卡扇区数据。</li><li><strong>要点</strong>：数据块大（通常512字节），使用SG DMA处理可能不连续的多个扇区请求。需要处理DMA与SD控制器内部FIFO的宽度对齐。</li><li><strong>参数</strong>：SDHC卡支持高达104MB/s（UHS-I）的传输。</li></ul></div>
+  <div class="scenario-card purple"><h4>图像传感器驱动</h4><ul><li><strong>场景</strong>：将CMOS传感器输出的RAW图像数据搬运到内存。</li><li><strong>要点</strong>：传输数据量大（一帧1080P RGB图像约6MB），对实时性要求高。通常使用专用视频DMA控制器（VDMA）。</li><li><strong>参数</strong>：像素时钟（PCLK）可能高达150MHz，需要精确计算DMA突发长度以匹配总线带宽。</li></ul></div>
+</div>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1.  <strong>环境搭建</strong>：在QEMU中模拟一个ARM Versatile Express板（例如使用<code>vexpress-a9</code>机器模型），它包含一个PL330 DMA控制器。确保内核配置已启用<code>CONFIG_DMA_ENGINE</code>和<code>CONFIG_AMBA_PL08X</code>（PL330的驱动）。</p>
+<p>2.  <strong>编写一个内核模块</strong>：实现一个简单的内存到内存的DMA拷贝。模块加载时，分配两个512字节的一致性缓冲区（<code>dma_alloc_coherent</code>），用数据填充源缓冲区，然后发起DMA传输将其拷贝到目标缓冲区。在传输完成的回调中，验证数据是否正确，并通过<code>printk</code>输出结果和耗时（可使用<code>ktime_get</code>）。最后在模块卸载时释放所有资源。</p>
+<p>3.  <strong>进阶挑战</strong>：修改上述模块，使用<code>kmalloc</code>分配普通缓冲区，然后通过<code>dma_map_single</code>进行映射，体验缓存同步的必要性（尝试注释掉<code>dma_sync_*</code>调用，观察数据是否出错）。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>DMA引擎框架中，<code>struct dma_chan</code>和<code>struct dma_async_tx_descriptor</code>分别代表什么？它们之间有何关系？</li>
+<li>在配置DMA从内存传输到设备时，<code>dst_addr</code>应该填入什么地址？如果填入了<code>ioremap</code>返回的地址会导致什么后果？</li>
+<li>什么时候应该使用<code>dma_alloc_coherent</code>，什么时候应该使用<code>dma_map_single</code>？忘记调用<code>dma_unmap_single</code>会导致什么问题？</li>
+<li>（情景题）你正在为一个以太网控制器写驱动，使用SG DMA接收数据包。在中断处理函数中，你发现<code>skb</code>里的数据时对时错。请列出至少两个可能的原因和排查方向。</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li><strong>框架核心</strong>：Linux dmaengine框架抽象了DMA控制器，通过通道（<code>dma_chan</code>）和描述符（<code>dma_async_tx_descriptor</code>）管理传输，支持高效的Scatter/Gather操作。</li>
+<li><strong>标准流程</strong>：发起DMA传输遵循“申请通道→配置参数→准备描述符→设置回调→提交→触发→等待完成”的四步流程，务必在回调中清理资源。</li>
+<li><strong>缓冲区管理是关键</strong>：根据缓冲区生命周期和性能需求，正确选择<code>dma_alloc_coherent</code>（一致性）或<code>dma_map_single</code>（流式）API，并严格遵守映射/取消映射、缓存同步的配对规则。</li>
+<li><strong>实战要点</strong>：地址配置必须使用物理/总线地址；SG DMA是处理非连续数据的主流方式；不同外设（音频、网络、图像）对DMA的使用模式有特定优化点。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="20.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="22.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第21章 —</div>
+    </div>
+</body>
+</html>

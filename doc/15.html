@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第15章 PWM背光与蜂鸣器驱动</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第15章 PWM背光与蜂鸣器驱动</h2></div>
+
+<div class="chapter-guide">
+  <div class="guide-meta">
+    <span class="guide-meta-item"><span class="difficulty-tag diff-intermediate">进阶</span></span>
+    <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握平台设备与设备树基础的驱动开发者</span>
+    <span class="guide-meta-item"><span class="meta-icon">🔧</span> 为LCD屏幕实现亮度调节或为设备添加提示音</span>
+  </div>
+  <div class="guide-body">
+    <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>Linux内核PWM子系统的核心API与数据结构</li><li>编写PWM背光驱动的完整流程与设备树配置</li><li>利用PWM信号驱动无源蜂鸣器播放简单音调</li></ul></div>
+    <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">PWM子系统</span><span class="guide-concept-tag">背光设备</span></div>
+  </div>
+</div>
+
+<p>开发板上的LCD屏幕背光突然只能全亮或全灭，无法调节亮度；蜂鸣器要么不响，要么只能发出一种单调的声音。这些问题通常是因为驱动没有正确利用PWM（脉冲宽度调制）信号。PWM就像是一个高速开关的水龙头，通过控制“开”和“关”的时间比例，来模拟出不同的“水流”大小，从而实现从亮度调节到电机调速的各种功能。</p>
+
+<h3>15.1 内核PWM子系统剖析</h3>
+<p>Linux内核将PWM控制器抽象为一个子系统，为驱动开发者提供了统一的编程接口。这类似于文件系统，无论底层是HDD还是SSD，上层都用统一的`open`、`read`、`write`接口。PWM子系统屏蔽了不同芯片（如i.MX6ULL的PWM1、RK3288的PWM2）的硬件差异。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">背光/蜂鸣器驱动</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node secondary">PWM核心层 (pwm.c)</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node accent">PWM芯片驱动 (如pwm-imx27.c)</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node accent">硬件PWM控制器</div>
+  </div>
+</div>
+
+<p>要使用一个PWM，首先需要从设备树中获取它。内核用`struct pwm_device`对象代表一个PWM通道。核心操作只有三个：配置、使能、关闭。</p>
+
+<pre><code><span class="cmt">// 关键API示例</span>
+<span class="kw">struct</span> pwm_device *<span class="func">pwm_get</span>(<span class="kw">struct</span> device *dev, <span class="kw">const char</span> *con_id);
+<span class="kw">int</span> <span class="func">pwm_config</span>(<span class="kw">struct</span> pwm_device *pwm, <span class="kw">int</span> duty_ns, <span class="kw">int</span> period_ns);
+<span class="kw">int</span> <span class="func">pwm_enable</span>(<span class="kw">struct</span> pwm_device *pwm);
+<span class="kw">void</span> <span class="func">pwm_disable</span>(<span class="kw">struct</span> pwm_device *pwm);</code></pre>
+
+<div class="key-point">
+<h4>💡 参数单位：纳秒（ns）</h4>
+<p>`pwm_config`的参数单位是纳秒，而不是百分比。`period_ns`是周期（频率的倒数），`duty_ns`是高电平时间。例如，要产生一个频率1KHz（周期1,000,000 ns）、占空比50%的方波，应调用`pwm_config(pwm, 500000, 1000000)`。</p>
+</div>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区</h4>
+<ul>
+<li><strong>混淆duty_ns与duty_cycle</strong>：`duty_ns`是绝对时间值，而占空比（duty cycle）是`duty_ns/period_ns`的比值。新手常误以为`duty_ns`是百分比。</li>
+<li><strong>未检查返回值</strong>：`pwm_get`可能返回`ERR_PTR(-ENODEV)`，如果直接使用会导致内核Oops。必须用`IS_ERR()`判断。</li>
+<li><strong>使能前未配置</strong>：调用`pwm_enable`前必须先调用`pwm_config`，否则PWM输出是未定义的，可能导致背光闪烁或蜂鸣器异响。</li>
+</ul>
+</div>
+
+<h3>15.2 编写PWM背光驱动</h3>
+<p>背光驱动将PWM的占空比映射为屏幕的亮度等级。假设我们的硬件连接是：i.MX6ULL的PWM1通道0（引脚GPIO1_IO08）控制一个背光LED。</p>
+
+<p>首先，在设备树中描述这个硬件关系：</p>
+
+<pre><code><span class="cmt">/* 在设备树源文件 (.dts) 中 */</span>
+<span class="kw">&backlight</span> {
+    compatible = <span class="str">"pwm-backlight"</span>;
+    pwms = <<span class="kw">&pwm1</span> <span class="num">0</span> <span class="num">50000</span>>; <span class="cmt">// 使用pwm1的通道0，默认周期50000ns (20kHz)</span>
+    brightness-levels = <<span class="num">0</span> <span class="num">1</span> <span class="num">2</span> <span class="num">4</span> <span class="num">8</span> <span class="num">16</span> <span class="num">32</span> <span class="num">64</span> <span class="num">128</span> <span class="num">255</span>>;
+    default-brightness-level = <<span class="num">8</span>>; <span class="cmt">// 默认亮度等级索引，对应128</span>
+    status = <span class="str">"okay"</span>;
+};
+
+<span class="kw">&pwm1</span> {
+    <span class="cmt">#pwm-cells = <2>;</span>
+    status = <span class="str">"okay"</span>;
+};</code></pre>
+
+<p>驱动代码的核心是注册一个`platform_driver`，并在其`probe`函数中，解析设备树节点，创建`backlight_device`。内核已经提供了`pwm_backlight`驱动框架，大多数情况下我们只需配置设备树。但在定制化需求中，可能需要自己实现`probe`函数。</p>
+
+<div class="flowchart">
+  <div class="flow-step">驱动模块初始化</div><span class="flow-arrow">→</span>
+  <div class="flow-step">platform_driver.probe被调用</div><span class="flow-arrow">→</span>
+  <div class="flow-step">从设备树获取PWM设备</div><span class="flow-arrow">→</span>
+  <div class="flow-step">创建并注册backlight_device</div><span class="flow-arrow">→</span>
+  <div class="flow-step">通过sysfs暴露亮度控制节点</div>
+</div>
+
+<p>驱动加载后，你会看到`/sys/class/backlight/backlight/`目录，其中的`brightness`和`max_brightness`文件用于控制亮度。用户空间可以通过`echo 5 > brightness`来设置亮度。</p>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：设备树（DTS）的详细语法与解析方法，是驱动开发的基础，已在<a href="#">第7章：设备树DTS语法解析</a>中深入讲解。如果你对上述设备树节点感到陌生，建议回顾该章节。</p>
+</div>
+
+<h3>15.3 驱动无源蜂鸣器</h3>
+<p>无源蜂鸣器与背光LED不同，它需要特定频率的方波才能发声。改变频率就是改变音调，改变占空比可以微调音量或音色。这里有个关键点：<strong>蜂鸣器通常对频率有范围要求</strong>，比如2KHz到5KHz。用错误的频率驱动，要么不响，要么声音很小。</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>播放单音</h4><ul><li>固定频率（如2.5KHz）</li><li>固定占空比（通常50%）</li><li>用于简单报警提示</li></ul></div>
+  <div class="scenario-card green"><h4>播放简单旋律</h4><ul><li>动态改变`period_ns`切换频率</li><li>配合内核定时器控制节拍</li><li>可播放《小星星》等简单曲目</li></ul></div>
+</div>
+
+<p>下面是一个让蜂鸣器以2.5KHz频率鸣叫1秒的驱动代码片段：</p>
+
+<pre><code><span class="kw">static</span> <span class="kw">void</span> <span class="func">buzzer_beep</span>(<span class="kw">struct</span> buzzer_dev *dev)
+{
+    <span class="cmt">// 计算周期：1秒 / 2500Hz = 400,000 纳秒</span>
+    <span class="kw">int</span> period_ns = <span class="num">1000000000</span> / <span class="num">2500</span>;
+    <span class="kw">int</span> duty_ns = period_ns / <span class="num">2</span>; <span class="cmt">// 50%占空比</span>
+
+    pwm_config(dev->pwm, duty_ns, period_ns);
+    pwm_enable(dev->pwm);
+
+    <span class="cmt">// 使用内核定时器，1秒后关闭</span>
+    mod_timer(&dev->stop_timer, jiffies + msecs_to_jiffies(<span class="num">1000</span>));
+}
+
+<span class="kw">static</span> <span class="kw">void</span> <span class="func">buzzer_stop_timer</span>(<span class="kw">unsigned long</span> data)
+{
+    <span class="kw">struct</span> buzzer_dev *dev = (<span class="kw">struct</span> buzzer_dev *)data;
+    pwm_disable(dev->pwm);
+}</code></pre>
+
+<p>我在一个智能家居网关项目里踩过坑，蜂鸣器声音像蚊子叫。排查后发现是PWM控制器输出的驱动电流不足。解决方案是在PWM输出引脚后增加一个三极管进行电流放大。所以，<strong>如果驱动后蜂鸣器声音小，先查硬件电路，再查软件频率和占空比</strong>。</p>
+
+<h3>15.4 性能考量与调试</h3>
+<p>PWM驱动的性能瓶颈通常不在CPU，而在PWM控制器本身的精度和响应延迟。选择参数时需要考虑硬件限制。</p>
+
+<table>
+<thead><tr><th>参数</th><th>典型范围</th><th>影响</th><th>调试建议</th></tr></thead>
+<tbody>
+<tr><td>频率 (1/period_ns)</td><td>几十Hz ~ 几MHz</td><td>背光：>100Hz避免闪烁<br>蜂鸣器：2KHz-5KHz</td><td>用示波器测量实际输出波形</td></tr>
+<tr><td>占空比精度</td><td>取决于控制器位数<br>(如8位/16位)</td><td>8位精度只有256级亮度</td><td>通过`pwm_get_state()`读取实际配置</td></tr>
+<tr><td>极性 (polarity)</td><td>PWM_POLARITY_NORMAL/INVERSED</td><td>决定高电平有效还是低电平有效</td><td>设备树中设置`pwm-invert = <1>`</td></tr>
+</tbody>
+</table>
+
+<p>调试时，最直接的工具是示波器。将探头接到PWM输出引脚，可以看到实际的波形、频率和占空比是否与代码配置一致。如果没有示波器，可以用万用表测量电压，PWM输出在使能时，平均电压应为 `VCC * duty_cycle`。</p>
+
+<div class="concept-block">
+<h4>🔧 生活类比：PWM调光 vs. 电阻调光</h4>
+<p>老式台灯用可变电阻调光，电阻发热浪费能量。PWM调光则像快速开关灯，肉眼因视觉暂留感觉亮度变化，但开关本身几乎不耗能。这就是为什么现代LED背光都用PWM，高效且亮度控制线性好。</p>
+</div>
+
+<p>内核也提供了调试信息。通过`cat /sys/kernel/debug/pwm`可以查看系统中所有已注册的PWM设备及其状态（使能、周期、占空比）。这是排查“PWM申请失败”或“配置未生效”问题的第一站。</p>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>假设你有一块搭载全志H3芯片的开发板，其PWM0引脚（PA05）连接了一个背光LED。请完成以下任务：</p>
+<ol>
+<li>编写设备树片段，为背光设备创建一个节点，命名为`backlight`，指定使用PWM0，默认频率为10KHz，亮度等级为0到10共11级，默认亮度为5。</li>
+<li>编写一个简单的内核模块，在`module_init`函数中，通过`pwm_get()`获取名为`“backlight”`的PWM设备，并配置其输出一个频率1KHz、占空比30%的方波，然后使能它。</li>
+<li>加载模块后，使用`cat /sys/kernel/debug/pwm`命令验证你的PWM配置是否已生效。</li>
+</ol>
+<p><strong>提示</strong>：全志H3的PWM设备树节点通常为`&pwm { status = “okay”; }`。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>如果调用`pwm_config(pwm, 300, 1000)`，产生的PWM信号频率是多少？占空比是多少？</li>
+<li>在背光驱动的设备树中，`brightness-levels`数组的数值代表什么？它们是如何与PWM占空比关联的？</li>
+<li>无源蜂鸣器在驱动时完全没有声音，列出三个可能的原因（分别从硬件、设备树、驱动代码角度）。</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li><strong>PWM子系统是硬件抽象层</strong>：它通过`pwm_get`、`pwm_config`、`pwm_enable/disable`等核心API，为驱动提供统一的PWM控制接口，屏蔽了底层芯片差异。</li>
+<li><strong>背光驱动是PWM的典型应用</strong>：通过设备树绑定PWM通道与背光设备，并利用内核的`pwm-backlight`框架或自行实现`probe`，将PWM占空比线性映射为屏幕亮度等级。</li>
+<li><strong>蜂鸣器驱动关注频率</strong>：驱动无源蜂鸣器本质是输出特定频率的方波，通过动态改变`period_ns`来改变音调，并需注意硬件驱动能力。</li>
+<li><strong>调试依赖硬件工具与内核信息</strong>：示波器是验证PWM波形的终极工具，而`/sys/kernel/debug/pwm`则是内核层排查配置问题的有效手段。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="14.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="16.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第15章 —</div>
+    </div>
+</body>
+</html>

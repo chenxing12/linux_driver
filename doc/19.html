@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第19章 LED子系统驱动</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第19章 LED子系统驱动</h2></div>
+
+<div class="chapter-guide">
+  <div class="guide-meta">
+    <span class="guide-meta-item"><span class="difficulty-tag diff-intermediate">进阶</span></span>
+    <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握GPIO操作，希望统一管理设备指示灯的开发者</span>
+    <span class="guide-meta-item"><span class="meta-icon">🔧</span> 为开发板、路由器、工控设备等添加状态指示灯控制</span>
+  </div>
+  <div class="guide-body">
+    <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>Linux LED子系统的核心架构与工作原理</li><li>如何编写一个完整的LED设备驱动</li><li>通过sysfs和trigger机制控制LED的多种行为</li></ul></div>
+    <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">LED Class</span><span class="guide-concept-tag">LED Trigger</span></div>
+  </div>
+</div>
+
+<p>想象一下家里的智能音箱，它有多个指示灯：电源、网络、麦克风状态。如果每个灯都由不同的程序直接控制GPIO，代码会混乱不堪。Linux内核的LED子系统就是为统一管理这些“灯”而设计的管家，它提供了标准化的接口，让应用层可以轻松控制，也让驱动开发者无需重复造轮子。</p>
+
+<div class="concept-block">
+<h4>LED子系统是什么？</h4>
+<p><strong>生活类比</strong>：就像一个智能家居的灯光控制中心，你不需要知道客厅灯具体连在哪个电路开关上，只需通过手机App选择“阅读模式”或“影院模式”。<br>
+<strong>技术定义</strong>：Linux内核中一个为发光二极管（LED）设备提供统一抽象、管理和控制接口的框架。它将具体的硬件操作（如GPIO翻转）与上层逻辑（如闪烁模式）解耦。</p>
+</div>
+
+<p>在项目中，我曾遇到一个需求：让一个LED根据系统CPU负载闪烁。如果自己从头实现定时器和亮度计算会很麻烦，而LED子系统内置的`heartbeat` trigger一行配置就解决了。这个框架的价值在于，它把常见的LED行为模式（称为Trigger）都标准化了。</p>
+
+<h3>LED子系统架构全景</h3>
+<p>整个子系统采用典型的分层设计，核心目标是隔离硬件差异，提供统一用户接口。驱动开发者只需关注最底层的硬件操作。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">用户空间 (Userspace)</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node secondary">sysfs接口</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node accent">LED Class Core</div>
+    <span class="arch-connector">⇄</span>
+    <div class="arch-node secondary">LED Triggers</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node primary">LED硬件驱动</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node accent">实际硬件 (GPIO/PWM等)</div>
+  </div>
+</div>
+
+<p>从上到下看：用户通过`/sys/class/leds/`目录下的文件控制LED；LED核心层管理所有注册的LED设备；Trigger定义了LED的行为逻辑；最底层是你的驱动，负责将“亮”、“灭”或“亮度值”翻译成具体的硬件操作。</p>
+
+<div class="key-point">
+<h4>关键数据结构：struct led_classdev</h4>
+<p>这是驱动开发者需要填充的核心结构体，定义在`<linux/leds.h>`中。它代表了一个具体的LED设备。</p>
+<pre><code><span class="kw">struct</span> led_classdev {
+    <span class="kw">const char</span> *<span class="func">name</span>; <span class="cmt">// LED名字，如 "power:green"</span>
+    <span class="kw">int</span> <span class="func">brightness</span>; <span class="cmt">// 当前亮度 (0~max_brightness)</span>
+    <span class="kw">int</span> <span class="func">max_brightness</span>; <span class="cmt">// 最大亮度，简单LED设为1</span>
+    <span class="kw">int</span> <span class="func">flags</span>; <span class="cmt">// 标志位，如 LED_CORE_SUSPENDRESUME</span>
+    <span class="cmt">/* 核心函数：设置亮度 */</span>
+    <span class="kw">void</span> (*<span class="func">brightness_set</span>)(<span class="kw">struct</span> led_classdev *led_cdev,
+                          <span class="kw">enum</span> led_brightness brightness);
+    <span class="cmt">/* 更多可选函数... */</span>
+};</code></pre>
+<p>你需要实现`brightness_set`回调函数，当用户修改sysfs中的`brightness`文件时，内核就会调用它。</p>
+</div>
+
+<h3>编写一个GPIO LED驱动</h3>
+<p>我们从最简单的场景开始：控制一个连接到GPIO的LED。假设在RK3568开发板上，用户LED连接在GPIO0_B7这个引脚上。</p>
+
+<div class="flowchart">
+  <div class="flow-step">1. 定义并填充led_classdev</div><span class="flow-arrow">→</span>
+  <div class="flow-step">2. 实现brightness_set函数</div><span class="flow-arrow">→</span>
+  <div class="flow-step">3. 调用led_classdev_register注册</div><span class="flow-arrow">→</span>
+  <div class="flow-step">4. 在模块退出时注销</div>
+</div>
+
+<p>以下是完整的驱动代码示例：</p>
+<pre><code><span class="cmt">// 必要的头文件</span>
+<span class="kw">#include</span> <linux/module.h>
+<span class="kw">#include</span> <linux/leds.h>
+<span class="kw">#include</span> <linux/gpio/consumer.h> <span class="cmt">// 使用GPIO描述符API</span>
+<span class="kw">#include</span> <linux/platform_device.h>
+
+<span class="kw">struct</span> gpio_led_data {
+    <span class="kw">struct</span> led_classdev cdev;
+    <span class="kw">struct</span> gpio_desc *gpiod;
+};
+
+<span class="kw">static void</span> <span class="func">gpio_led_set</span>(<span class="kw">struct</span> led_classdev *led_cdev,
+                       <span class="kw">enum</span> led_brightness value) {
+    <span class="kw">struct</span> gpio_led_data *led_data =
+        container_of(led_cdev, <span class="kw">struct</span> gpio_led_data, cdev);
+    <span class="cmt">// 将亮度值转换为GPIO电平：非0亮，0灭</span>
+    gpiod_set_value(led_data->gpiod, value ? <span class="num">1</span> : <span class="num">0</span>);
+}
+
+<span class="kw">static int</span> <span class="func">gpio_led_probe</span>(<span class="kw">struct</span> platform_device *pdev) {
+    <span class="kw">struct</span> device *dev = &pdev->dev;
+    <span class="kw">struct</span> gpio_led_data *led_data;
+    <span class="kw">int</span> ret;
+
+    led_data = devm_kzalloc(dev, <span class="kw">sizeof</span>(*led_data), GFP_KERNEL);
+    <span class="kw">if</span> (!led_data)
+        <span class="kw">return</span> -ENOMEM;
+
+    <span class="cmt">// 从设备树获取GPIO，名字为"led"</span>
+    led_data->gpiod = devm_gpiod_get(dev, <span class="str">"led"</span>, GPIOD_OUT_LOW);
+    <span class="kw">if</span> (IS_ERR(led_data->gpiod))
+        <span class="kw">return</span> PTR_ERR(led_data->gpiod);
+
+    <span class="cmt">// 填充LED设备结构</span>
+    led_data->cdev.name = <span class="str">"user-led"</span>;
+    led_data->cdev.max_brightness = <span class="num">1</span>; <span class="cmt">// 只有开和关</span>
+    led_data->cdev.brightness_set = gpio_led_set;
+    led_data->cdev.default_trigger = <span class="str">"heartbeat"</span>; <span class="cmt">// 默认心跳闪烁</span>
+
+    <span class="cmt">// 注册到LED子系统</span>
+    ret = devm_led_classdev_register(dev, &led_data->cdev);
+    <span class="kw">if</span> (ret) {
+        dev_err(dev, <span class="str">"Failed to register LED: %d\n"</span>, ret);
+        <span class="kw">return</span> ret;
+    }
+
+    platform_set_drvdata(pdev, led_data);
+    dev_info(dev, <span class="str">"GPIO LED driver probed successfully\n"</span>);
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+
+<span class="cmt">// 设备树匹配表（省略模块加载和平台驱动注册的样板代码）</span>
+<span class="kw">static const struct</span> of_device_id gpio_led_of_match[] = {
+    { .compatible = <span class="str">"mycompany,gpio-led"</span> },
+    {},
+};
+MODULE_DEVICE_TABLE(of, gpio_led_of_match);</code></pre>
+
+<p>对应的设备树节点应该这样写：</p>
+<pre><code><span class="cmt">// 在RK3568的DTS文件中</span>
+user_led: led {
+    compatible = <span class="str">"mycompany,gpio-led"</span>;
+    label = <span class="str">"User LED"</span>;
+    gpios = <&gpio0 RK_PB7 GPIO_ACTIVE_HIGH>; <span class="cmt">// GPIO0_B7，高电平亮</span>
+    <span class="cmt">/* 可选：指定默认trigger */
+    /* linux,default-trigger = "heartbeat"; */
+};</code></pre>
+
+<div class="tip-box warning">
+<h4>常见误区</h4>
+<ul>
+<li><strong>混淆brightness值与GPIO电平</strong>：在`brightness_set`函数中，参数`value`是亮度值（0~max_brightness），你需要根据硬件逻辑将其转换为具体的电平。对于简单的开关LED，`value > 0`通常意味着点亮。</li>
+<li><strong>忘记处理max_brightness</strong>：如果你的LED支持PWM调光（比如max_brightness=255），但驱动只实现了开关，用户设置中间亮度值（如128）时，你的驱动可能无法正确处理。实际开发中，大部分支持PWM的LED芯片驱动会使用`brightness_set_blocking`函数。</li>
+<li><strong>资源泄漏</strong>：使用`devm_led_classdev_register`和`devm_gpiod_get`等托管函数（managed API）可以自动在设备注销时释放资源，避免在`remove`函数中忘记调用`led_classdev_unregister`。</li>
+</ul>
+</div>
+
+<h3>强大的Trigger机制</h3>
+<p><strong>生活类比</strong>：就像给灯设置了一个智能定时器或感应器，你可以设定“有人移动时亮”、“每隔5秒闪一下”、“CPU忙时快闪”，而无需自己不断写程序去控制开关。<br>
+<strong>技术定义</strong>：LED Trigger是内核中预定义的一些规则，它们可以自动改变LED的亮度状态，触发条件可以是定时器、磁盘活动、网络流量、CPU负载等。</p>
+
+<p>Trigger是LED子系统最实用的功能之一。内核已经内置了许多有用的trigger，你可以在`/sys/class/leds/<led-name>/trigger`文件中查看和选择。</p>
+
+<table>
+<caption>常用内置LED Trigger及其用途</caption>
+<thead><tr><th>Trigger名称</th><th>触发条件/行为</th><th>典型应用场景</th><th>是否需要驱动额外支持</th></tr></thead>
+<tbody>
+<tr><td><code>none</code></td><td>无自动触发，完全由用户控制</td><td>手动开关指示灯</td><td>否</td></tr>
+<tr><td><code>timer</code></td><td>固定频率闪烁（可设置延迟时间）</td><td>设备待机指示、报警闪烁</td><td>否</td></tr>
+<tr><td><code>heartbeat</code></td><td>模拟心跳（双闪，间隔随系统负载变化）</td><td>系统运行状态指示</td><td>否</td></tr>
+<tr><td><code>disk-activity</code></td><td>磁盘有读写操作时闪烁</td><td>硬盘活动指示灯</td><td>否</td></tr>
+<tr><td><code>cpu0</code></td><td>对应CPU核心忙碌时亮起</td><td>多核CPU负载可视化</td><td>否</td></tr>
+<tr><td><code>netdev</code></td><td>网络设备有数据收发时闪烁</td><td>网络活动指示灯</td><td>需要配置网络设备名</td></tr>
+<tr><td><code>gpio</code></td><td>监视另一个GPIO的电平</td><td>按键背光、外部事件指示</td><td>需要指定GPIO号</td></tr>
+</tbody>
+</table>
+
+<p>你可以在驱动中通过`led_cdev.default_trigger`指定默认trigger，用户也可以在系统运行时通过sysfs动态切换。例如，让一个LED显示CPU0的负载：</p>
+<pre><code><span class="cmt"># 查看当前trigger</span>
+$ cat /sys/class/leds/user-led/trigger
+[none] timer heartbeat cpu0 disk-activity ...
+
+<span class="cmt"># 切换到cpu0 trigger</span>
+$ echo cpu0 > /sys/class/leds/user-led/trigger
+$ cat /sys/class/leds/user-led/trigger
+none timer heartbeat [cpu0] disk-activity ...</code></pre>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：Trigger机制依赖于内核的其他子系统。例如，`disk-activity`需要块设备层支持，`netdev`需要网络子系统。理解这些关联有助于调试，当某个trigger不工作时，可能是相关内核配置未开启（如`CONFIG_LEDS_TRIGGER_DISK_ACTIVITY`）。</p>
+</div>
+
+<h3>进阶：支持PWM调光的LED驱动</h3>
+<p>许多现代开发板（如树莓派、i.MX8MP）的LED支持PWM调光，可以实现呼吸灯效果。这时，你需要处理的是连续的亮度值，而不仅仅是0和1。</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>简单GPIO LED</h4><ul><li>max_brightness = 1</li><li>实现 brightness_set</li><li>仅开关两种状态</li></ul></div>
+  <div class="scenario-card green"><h4>PWM调光LED</h4><ul><li>max_brightness = 255</li><li>实现 brightness_set_blocking</li><li>需获取PWM设备，设置占空比</li></ul></div>
+  <div class="scenario-card purple"><h4>多色LED (RGB)</h4><ul><li>注册多个led_classdev</li><li>如：red, green, blue</li><li>或使用multicolor类</li></ul></div>
+  <div class="scenario-card orange"><h4>硬件复杂LED</h4><ul><li>如LED驱动芯片（LP50xx, AW20xx）</li><li>通过I2C/SPI通信</li><li>需实现模式寄存器配置</li></ul></div>
+</div>
+
+<p>对于PWM LED，核心是使用`brightness_set_blocking`回调，因为它可能涉及睡眠操作（PWM配置）。驱动需要获取PWM设备并设置占空比。一个常见的坑是：PWM的周期（period）设置不当会导致肉眼可见的闪烁。我在一个使用i.MX6ULL的项目中，将PWM周期设置为5ms（200Hz）以上，才消除了低频闪烁感。</p>
+
+<pre><code><span class="kw">static int</span> <span class="func">pwm_led_set</span>(<span class="kw">struct</span> led_classdev *led_cdev,
+                      <span class="kw">enum</span> led_brightness brightness) {
+    <span class="kw">struct</span> pwm_led_data *led_data = ...;
+    <span class="kw">struct</span> pwm_device *pwm = led_data->pwm;
+    <span class="kw">int</span> duty_cycle;
+
+    <span class="cmt">// 计算占空比：亮度值 / 最大亮度 * PWM周期</span>
+    duty_cycle = (brightness * led_data->period) / led_data->cdev.max_brightness;
+    <span class="cmt">// 配置PWM，注意pwm_config可能引起调度（睡眠）</span>
+    pwm_config(pwm, duty_cycle, led_data->period);
+    <span class="kw">if</span> (brightness == <span class="num">0</span>) {
+        pwm_disable(pwm);
+    } <span class="kw">else</span> {
+        pwm_enable(pwm);
+    }
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+<span class="cmt">// 在probe中赋值</span>
+led_data->cdev.brightness_set_blocking = pwm_led_set;</code></pre>
+
+<p>实际开发中，更推荐使用内核提供的`leds-pwm`通用驱动（`drivers/leds/leds-pwm.c`），它已经完美处理了PWM调光的细节，你只需要在设备树中正确引用PWM节点即可，无需自己编写驱动。</p>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1.  <strong>在QEMU或真实开发板上实验</strong>：如果你有一个带有可编程LED的开发板（如树莓派、BeagleBone或任何一款主流嵌入式板），找到其用户LED对应的GPIO。编写一个最简单的LED驱动模块（参考本章的GPIO LED示例），编译并加载。观察`/sys/class/leds/`目录下是否出现你的设备。<br>
+2.  <strong>玩转Trigger</strong>：加载驱动后，尝试通过sysfs切换不同的trigger：
+    <pre><code>echo timer > /sys/class/leds/user-led/trigger
+cat /sys/class/leds/user-led/delay_on  # 查看亮的时间
+echo 100 > /sys/class/leds/user-led/delay_on  # 设置为100ms
+echo 200 > /sys/class/leds/user-led/delay_off # 灭200ms</code></pre>
+    观察LED的闪烁模式变化。<br>
+3.  <strong>实现自定义Trigger（可选）</strong>：如果你有兴趣，可以查阅内核源码`drivers/leds/trigger/`目录，看看`ledtrig-heartbeat.c`是如何实现的。尝试模仿它，写一个最简单的`mytrigger`，让LED以固定的三短一长模式闪烁。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>LED子系统的`brightness_set`回调函数中，参数`brightness`的值范围是多少？驱动如何将其转换为GPIO电平？</li>
+<li>用户通过什么路径在用户空间控制一个名为`sys-led`的LED的开关？如果要让它开始“心跳”闪烁，应该向哪个文件写入什么内容？</li>
+<li>如果一个LED硬件本身支持256级调光（通过PWM），你的驱动中`max_brightness`应该设置为多少？你需要实现`brightness_set`还是`brightness_set_blocking`回调？为什么？</li>
+<li>（思考题）假设你要为一个RGB三色LED编写驱动，你会选择注册一个`led_classdev`还是三个？各自的优缺点是什么？</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li>LED子系统是内核统一管理指示灯的标准框架，采用“驱动-核心-Trigger-用户接口”的分层架构，极大简化了LED控制逻辑。</li>
+<li>编写LED驱动的核心是定义并注册一个`struct led_classdev`结构体，必须实现其`brightness_set`（或`brightness_set_blocking`）回调函数，将抽象的亮度值转换为具体的硬件操作。</li>
+<li>Trigger机制是LED子系统的精髓，它允许LED根据系统事件（定时、心跳、磁盘活动、CPU负载等）自动改变状态，无需应用层持续干预，内核已内置多种实用trigger。</li>
+<li>对于复杂LED（如PWM调光、多色RGB、I2C控制芯片），驱动需要处理连续亮度值或寄存器配置，但核心注册流程与GPIO LED一致，应优先考虑使用内核已有的通用驱动（如`leds-pwm`）。</li>
+<li>通过sysfs接口（`/sys/class/leds/<name>/`）可以动态查询和修改LED的亮度、最大亮度、当前trigger及trigger参数，这是用户空间与LED驱动交互的标准方式。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="18.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="20.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第19章 —</div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第1章 字符设备驱动框架</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第1章 字符设备驱动框架</h2></div>
+
+<div class="chapter-guide">
+    <div class="guide-meta">
+      <span class="guide-meta-item"><span class="difficulty-tag diff-beginner">入门</span></span>
+      <span class="guide-meta-item"><span class="meta-icon">👤</span> 从应用层转向内核开发的工程师</span>
+      <span class="guide-meta-item"><span class="meta-icon">⏱</span> 约25分钟</span>
+      <span class="guide-meta-item"><span class="meta-icon">🔧</span> 为自定义硬件编写最基础的访问接口</span>
+    </div>
+    <div class="guide-body">
+      <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>理解字符设备驱动的核心骨架与数据流向</li><li>掌握从用户空间到内核驱动的完整调用链路</li><li>亲手编写一个可加载、可交互的“虚拟设备”驱动</li></ul></div>
+      <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">file_operations</span><span class="guide-concept-tag">设备号</span><span class="guide-concept-tag">cdev</span></div>
+    </div>
+  </div>
+
+<p>深夜，你接到线上告警：一台负责数据采集的嵌入式设备，其自定义的传感器模块突然无法读取数据。你<code>ssh</code>登录上去，尝试用测试程序直接操作设备文件 <code>/dev/my_sensor</code>，执行 <code>read</code> 操作，返回的不是预期的采样值，而是一个冷冰冰的 “<span class="str">Invalid argument</span>”。更棘手的是，<code>dmesg</code> 里刷出了一行内核错误：<span class="str">“my_sensor: no such device”</span>。问题出在哪里？是硬件坏了，还是驱动加载异常？你意识到，必须深入那个连接用户程序与硬件的桥梁——字符设备驱动，才能找到答案。</p>
+
+<p>本章，我们就从零开始，拆解这个“桥梁”的建造蓝图。你不用关心具体的传感器芯片（比如 MPU6050 或 BME280），我们先聚焦于驱动本身最基础的框架：字符设备驱动。它是 Linux 驱动世界的“Hello World”，也是你理解后续一切复杂子系统（I2C, SPI, Input等）的基石。</p>
+
+<h3>1.1 核心问题：用户层的 `read()` 如何抵达硬件？</h3>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">用户空间</div>
+    <span class="arch-connector">↓ (syscall)</span>
+    <div class="arch-node secondary">VFS 虚拟文件系统</div>
+    <span class="arch-connector">↓ (file_operations)</span>
+    <div class="arch-node accent">字符设备驱动</div>
+    <span class="arch-connector">↓ (硬件操作)</span>
+    <div class="arch-node primary">物理硬件</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector"></span><span class="arch-connector"></span><span class="arch-connector">↗</span></div>
+  <div class="arch-row">
+    <div class="arch-node secondary">设备文件 `/dev/xxx`</div>
+    <span class="arch-connector">⇄</span>
+    <div class="arch-node accent">`cdev` 结构体</div>
+  </div>
+</div>
+
+<p>上图清晰地展示了当你调用 <code>read(fd, buf, size)</code> 时发生的故事。数据流穿过层层抽象，最终由你编写的驱动函数处理。这里涉及三个关键数据结构，它们的职责对比如下：</p>
+
+<table>
+<thead><tr><th>数据结构</th><th>所在层</th><th>核心职责</th><th>生命周期</th></tr></thead>
+<tbody>
+<tr><td><strong>file_operations</strong></td><td>驱动接口层</td><td>函数指针集合，定义 `open`, `read`, `write`, `ioctl` 等操作的具体实现。</td><td>驱动编写时静态定义，全局唯一。</td></tr>
+<tr><td><strong>cdev</strong></td><td>内核设备管理层</td><td>将 `设备号` 与 `file_operations` 绑定，向内核注册一个字符设备。</td><td>驱动加载时动态分配并注册，卸载时销毁。</td></tr>
+<tr><td><strong>设备文件 (/dev/xxx)</strong></td><td>用户接口层</td><td>用户空间的句柄，通过 `主设备号` 关联到对应的 `cdev`。</td><td>由 `mknod` 或 `udev` 创建，可持久化存在。</td></tr>
+</tbody>
+</table>
+
+<p><strong>很多教程不会告诉你</strong>：`/dev` 下的设备文件只是一个“门户”（inode），它本身不包含驱动代码。真正的驱动实体是内核中的 `cdev` 对象。这就是为什么有时设备文件存在，但操作却失败（提示“No such device”）——因为对应的 `cdev` 可能并未成功注册或已注销。我在排查一个 <strong>Linux 4.19.y</strong> 内核的驱动 bug 时就踩过这个坑，驱动模块卸载后，<code>/dev</code> 下的文件忘了删除，下次加载时因为设备号冲突导致 `cdev_add` 失败，但表象就是用户程序报错“Invalid argument”。</p>
+
+<h3>1.2 驱动骨架：一个最小的可运行示例</h3>
+
+<p>理论说再多，不如一行代码。下面是一个最精简的字符设备驱动骨架，它创建一个名为 `“vchar”` 的虚拟设备，实现了 `open`、`release` 和 `read` 操作。请在你的实验环境（建议使用 Ubuntu 20.04 或更新版本，内核头文件齐全）中创建文件 `vchar_driver.c`：</p>
+
+<pre><code><span class="cmt">// vchar_driver.c - 虚拟字符设备驱动骨架</span>
+<span class="kw">#include</span> <span class="str">&lt;linux/module.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;linux/fs.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;linux/cdev.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;linux/uaccess.h&gt;</span> <span class="cmt">// 用于 copy_to_user</span>
+
+<span class="kw">#define</span> DEVICE_NAME <span class="str">"vchar"</span>
+<span class="kw">static</span> <span class="kw">int</span> major_num = <span class="num">0</span>; <span class="cmt">// 动态分配主设备号</span>
+<span class="kw">static</span> <span class="kw">struct</span> cdev vchar_cdev;
+
+<span class="cmt">// 1. 定义 file_operations</span>
+<span class="kw">static</span> <span class="kw">int</span> <span class="func">vchar_open</span>(<span class="kw">struct</span> inode *inode, <span class="kw">struct</span> file *filp) {
+    printk(KERN_INFO <span class="str">"vchar device opened.\n"</span>);
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+
+<span class="kw">static</span> <span class="kw">ssize_t</span> <span class="func">vchar_read</span>(<span class="kw">struct</span> file *filp, <span class="kw">char __user</span> *buf, <span class="kw">size_t</span> count, <span class="kw">loff_t</span> *f_pos) {
+    <span class="kw">char</span> msg[] = <span class="str">"Hello from kernel!\n"</span>;
+    <span class="kw">size_t</span> len = <span class="func">strlen</span>(msg);
+    <span class="kw">if</span> (*f_pos >= len)
+        <span class="kw">return</span> <span class="num">0</span>;
+    <span class="kw">if</span> (count > len - *f_pos)
+        count = len - *f_pos;
+    <span class="kw">if</span> (<span class="func">copy_to_user</span>(buf, msg + *f_pos, count))
+        <span class="kw">return</span> -EFAULT;
+    *f_pos += count;
+    <span class="kw">return</span> count;
+}
+
+<span class="kw">static</span> <span class="kw">int</span> <span class="func">vchar_release</span>(<span class="kw">struct</span> inode *inode, <span class="kw">struct</span> file *filp) {
+    printk(KERN_INFO <span class="str">"vchar device closed.\n"</span>);
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+
+<span class="kw">static</span> <span class="kw">struct</span> file_operations vchar_fops = {
+    .owner = THIS_MODULE,
+    .open = vchar_open,
+    .read = vchar_read,
+    .release = vchar_release,
+};
+
+<span class="cmt">// 2. 模块初始化与退出</span>
+<span class="kw">static</span> <span class="kw">int</span> __init <span class="func">vchar_init</span>(<span class="kw">void</span>) {
+    <span class="kw">dev_t</span> dev_num;
+    <span class="kw">int</span> ret;
+
+    <span class="cmt">// 动态申请一个主设备号</span>
+    ret = <span class="func">alloc_chrdev_region</span>(&dev_num, <span class="num">0</span>, <span class="num">1</span>, DEVICE_NAME);
+    <span class="kw">if</span> (ret < <span class="num">0</span>) {
+        printk(KERN_ERR <span class="str">"Failed to allocate chrdev region.\n"</span>);
+        <span class="kw">return</span> ret;
+    }
+    major_num = <span class="func">MAJOR</span>(dev_num);
+    printk(KERN_INFO <span class="str">"vchar: major number is %d\n"</span>, major_num);
+
+    <span class="cmt">// 初始化并添加 cdev</span>
+    <span class="func">cdev_init</span>(&vchar_cdev, &vchar_fops);
+    vchar_cdev.owner = THIS_MODULE;
+    ret = <span class="func">cdev_add</span>(&vchar_cdev, dev_num, <span class="num">1</span>);
+    <span class="kw">if</span> (ret) {
+        printk(KERN_ERR <span class="str">"Failed to add cdev.\n"</span>);
+        <span class="func">unregister_chrdev_region</span>(dev_num, <span class="num">1</span>);
+        <span class="kw">return</span> ret;
+    }
+    printk(KERN_INFO <span class="str">"vchar driver loaded successfully.\n"</span>);
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+
+<span class="kw">static</span> <span class="kw">void</span> __exit <span class="func">vchar_exit</span>(<span class="kw">void</span>) {
+    <span class="kw">dev_t</span> dev_num = <span class="func">MKDEV</span>(major_num, <span class="num">0</span>);
+    <span class="func">cdev_del</span>(&vchar_cdev);
+    <span class="func">unregister_chrdev_region</span>(dev_num, <span class="num">1</span>);
+    printk(KERN_INFO <span class="str">"vchar driver unloaded.\n"</span>);
+}
+
+<span class="func">module_init</span>(vchar_init);
+<span class="func">module_exit</span>(vchar_exit);
+<span class="func">MODULE_LICENSE</span>(<span class="str">"GPL"</span>);
+<span class="func">MODULE_AUTHOR</span>(<span class="str">"Your Name"</span>);
+<span class="func">MODULE_DESCRIPTION</span>(<span class="str">"A minimal virtual character device driver"</span>);
+</code></pre>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区：内核空间与用户空间的内存隔离</h4>
+<p>注意 `vchar_read` 函数中的 <code>copy_to_user</code>。这是<strong>必须的</strong>。内核驱动直接访问的用户空间指针 `buf` 是虚拟地址，在内核上下文无法直接解引用。必须使用内核提供的拷贝函数。我曾见过新手直接使用 `memcpy`，导致内核立刻 <strong>oops（内核崩溃）</strong>，错误信息类似 <span class="str">“Unable to handle kernel paging request at virtual address xxxxxxxx”</span>。记住：<strong>永远不要直接解引用来自用户空间的指针</strong>。</p>
+</div>
+
+<h3>1.3 从编译到测试：完整的驱动生命周期</h3>
+
+<p>有了代码，下一步是让它跑起来。这个过程可以概括为以下流程：</p>
+
+<div class="flowchart">
+  <div class="flow-step">编写驱动源码 (.c)</div><span class="flow-arrow">→</span>
+  <div class="flow-step">编写 Makefile</div><span class="flow-arrow">→</span>
+  <div class="flow-step">`make` 编译生成 .ko 文件</div><span class="flow-arrow">→</span>
+  <div class="flow-step">`insmod` 加载驱动</div><span class="flow-arrow">→</span>
+  <div class="flow-step">`mknod` 创建设备文件</div><span class="flow-arrow">→</span>
+  <div class="flow-step">用户程序测试</div><span class="flow-arrow">→</span>
+  <div class="flow-step">`rmmod` 卸载驱动</div>
+</div>
+
+<p>你需要一个对应的 `Makefile`。注意，内核模块的编译需要指向你当前运行内核的构建目录（通常是 `/lib/modules/$(uname -r)/build`）。</p>
+
+<pre><code><span class="cmt"># Makefile</span>
+<span class="kw">ifneq</span> ($(KERNELRELEASE),)
+    obj-m := vchar_driver.o
+<span class="kw">else</span>
+    KERNELDIR ?= /lib/modules/$(<span class="func">shell</span> uname -r)/build
+    PWD := $(<span class="func">shell</span> pwd)
+<span class="kw">default</span>:
+    $(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+<span class="kw">clean</span>:
+    $(MAKE) -C $(KERNELDIR) M=$(PWD) clean
+<span class="kw">endif</span>
+</code></pre>
+
+<p>在终端中执行 `make`，成功后会产生 `vchar_driver.ko` 文件。现在，让我们按步骤操作：</p>
+
+<table>
+<thead><tr><th>步骤</th><th>命令</th><th>预期输出/目的</th><th>关键观察点</th></tr></thead>
+<tbody>
+<tr><td>1. 加载模块</td><td><code>sudo insmod vchar_driver.ko</code></td><td>驱动初始化函数 `vchar_init` 被调用。</td><td>运行 <code>dmesg | tail -5</code>，看到 <span class="str">“vchar: major number is XXX”</span> 和加载成功的消息。<strong>记下这个主设备号</strong>，假设是 511。</td></tr>
+<tr><td>2. 创建设备文件</td><td><code>sudo mknod /dev/vchar c 511 0</code></td><td>在 `/dev` 下创建节点，`c` 表示字符设备，`511` 是主设备号，`0` 是次设备号。</td><td>检查 <code>ls -l /dev/vchar</code>，权限应为 `crw-r--r--`。</td></tr>
+<tr><td>3. 编写测试程序</td><td>创建 `test_vchar.c`，调用 `open`, `read`, `close`。</td><td>从驱动读取 “Hello from kernel!” 字符串。</td><td>确保编译时加 `-o test_vchar`。</td></tr>
+<tr><td>4. 运行测试</td><td><code>sudo ./test_vchar</code></td><td>程序打印出内核消息。</td><td>同时用 `dmesg | tail` 观察驱动打印的 open/close 日志。</td></tr>
+<tr><td>5. 清理</td><td><code>sudo rmmod vchar_driver</code><br><code>sudo rm /dev/vchar</code></td><td>驱动退出函数被调用，资源释放。</td><td>再次 `dmesg`，应看到卸载成功的消息。</td></tr>
+</tbody>
+</table>
+
+<div class="tip-box">
+<h4>🔧 动手实践：你的第一个测试程序</h4>
+<p>创建一个简单的测试程序 `test_vchar.c`：</p>
+<pre><code><span class="cmt">// test_vchar.c</span>
+<span class="kw">#include</span> <span class="str">&lt;stdio.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;fcntl.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;unistd.h&gt;</span>
+<span class="kw">int</span> <span class="func">main</span>() {
+    <span class="kw">int</span> fd = <span class="func">open</span>(<span class="str">"/dev/vchar"</span>, O_RDONLY);
+    <span class="kw">if</span> (fd < <span class="num">0</span>) { perror(<span class="str">"open failed"</span>); <span class="kw">return</span> <span class="num">1</span>; }
+    <span class="kw">char</span> buf[<span class="num">100</span>];
+    <span class="kw">int</span> n = <span class="func">read</span>(fd, buf, <span class="kw">sizeof</span>(buf)-<span class="num">1</span>);
+    <span class="kw">if</span> (n > <span class="num">0</span>) { buf[n] = <span class="str">'\0'</span>; <span class="func">printf</span>(<span class="str">"Read from driver: %s"</span>, buf); }
+    <span class="func">close</span>(fd);
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+</code></pre>
+<p>编译并运行：<code>gcc -o test_vchar test_vchar.c && sudo ./test_vchar</code>。你应该看到输出。</p>
+</div>
+
+<h3>1.4 深入 `file_operations`：驱动与应用的契约</h3>
+
+<p>`file_operations` 结构体是驱动向 VFS 注册的“方法表”，它定义了驱动能支持哪些操作。对于入门驱动，你需要优先掌握以下几个核心成员：</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>open/release</h4><ul><li><strong>open</strong>: 设备打开时调用，常做初始化、资源申请、引用计数+1。</li><li><strong>release</strong>: 设备关闭时调用，做清理工作。注意不是所有 close 都会触发 release。</li></ul></div>
+  <div class="scenario-card green"><h4>read/write</h4><ul><li>数据读写核心。参数 `__user` 指针需用 `copy_to/from_user`。</li><li>`loff_t *f_pos` 指向文件偏移指针，驱动需要更新它。</li></ul></div>
+  <div class="scenario-card purple"><h4>unlocked_ioctl</h4><ul><li>用于实现设备特定的命令（如设置参数、读取状态）。</li><li>在 Linux 2.6.36 后，优先使用它而非旧的 `ioctl`。</li></ul></div>
+  <div class="scenario-card orange"><h4>llseek</h4><ul><li>修改文件读写位置。对于顺序访问的设备（如键盘），可设为 `no_llseek`。</li><li>需要处理 `SEEK_SET`, `SEEK_CUR`, `SEEK_END`。</li></ul></div>
+</div>
+
+<p><strong>一个具体的版本差异坑</strong>：在 <strong>Linux 5.10+</strong> 内核中，`file_operations` 里的 `read` 和 `write` 函数原型发生了变化，移除了 `struct file *` 参数后的 `char __user *` 修饰符。如果你把为旧内核（如 4.x）编写的驱动直接拿到新内核上编译，会得到类型不匹配的编译错误。解决方案是使用内核头文件提供的 `#if LINUX_VERSION_CODE` 宏来做条件编译，或者直接按照新内核的原型编写。</p>
+
+<div class="editor-note">
+<p>📘 <strong>扩展阅读</strong>：本章我们手动使用 `mknod` 创建设备文件。在实际项目中，更常见的做法是配合 udev 规则自动创建设备节点，这涉及到设备模型和 `class_create`、`device_create` 等函数。我们将在第26章《设备模型与kobject》中详细探讨如何让驱动更“现代化”地集成到 sysfs 中，实现设备节点的自动管理。</p>
+</div>
+
+<h3>1.5 静态 vs 动态：设备号分配策略选择</h3>
+
+<p>在 `vchar_init` 中，我们使用了 `alloc_chrdev_region` 来动态申请一个未使用的主设备号。这是推荐的做法。但在某些嵌入式产品中，为了固定设备节点号，可能会采用静态分配。两者的对比如下：</p>
+
+<table>
+<thead><tr><th>分配方式</th><th>API 函数</th><th>优点</th><th>缺点</th><th>适用场景</th></tr></thead>
+<tbody>
+<tr><td><strong>动态分配</strong></td><td><code>alloc_chrdev_region</code></td><td>避免设备号冲突，灵活。驱动可移植性强。</td><td>主设备号不固定，每次加载可能变化，需要从日志或 `/proc/devices` 读取。</td><td><strong>绝大多数场景，特别是通用驱动、学习实验。</strong></td></tr>
+<tr><td><strong>静态分配</strong></td><td><code>register_chrdev_region</code></td><td>设备号固定，便于预先编写脚本或配置。</td><td>可能与其他驱动冲突，需要查阅 `Documentation/devices.txt` 选择未使用的号。</td><td>产品固化，有明确的设备号规划；或需要兼容老版本脚本。</td></tr>
+</tbody>
+</table>
+
+<p>实际开发中，大部分团队会选择动态分配，并结合 udev 规则或驱动自身通过 `device_create` 自动创建设备节点，完全避免手动执行 `mknod`。如果你<strong>必须</strong>使用静态号，我建议选择一个较大的主设备号（比如 240-254 范围），这个区域通常预留给本地或实验用途，冲突概率小。</p>
+
+<div class="practice-box">
+<h4>🧪 实战练习：为虚拟设备增加 `write` 功能</h4>
+<p>目标：修改 `vchar_driver.c`，增加 `file_operations` 中的 `.write` 函数指针，实现一个简单的回显功能——将用户写入的数据存储在内核的一个静态缓冲区中，并在下次 `read` 时返回。</p>
+<p><strong>要求：</strong></p>
+<ol>
+<li>在驱动中定义一个静态字符数组 `static char kernel_buffer[1024];` 和长度变量。</li>
+<li>实现 `vchar_write` 函数，使用 `copy_from_user` 将用户数据拷贝到 `kernel_buffer`。</li>
+<li>修改 `vchar_read` 函数，改为从 `kernel_buffer` 中读取数据。</li>
+<li>更新 `vchar_fops`，加入 `.write = vchar_write`。</li>
+<li>重新编译、加载、测试。使用 `echo “test data” | sudo tee /dev/vchar` 写入，再用 `cat /dev/vchar` 读取验证。</li>
+</ol>
+<p><strong>提示：</strong>注意 `write` 函数的返回值是成功写入的字节数。处理好缓冲区边界，防止溢出。</p>
+</div>
+
+<div class="self-check">
+<h4>✅ 自我检查清单</h4>
+<ul>
+<li>你能在不看代码的情况下，说出用户程序调用 `read()` 到驱动函数被调用的完整路径吗？</li>
+<li>`cdev_init` 和 `cdev_add` 分别做了什么？它们的调用失败会导致什么现象？</li>
+<li>为什么驱动中不能直接用 `memcpy` 拷贝用户空间的数据？正确的函数是什么？</li>
+<li>动态分配设备号后，如何确定系统实际分配的主设备号是多少？</li>
+<li>驱动模块卸载函数 `vchar_exit` 中，释放资源的顺序应该是怎样的？（提示：先 `cdev_del` 还是先 `unregister_chrdev_region`？）</li>
+</ul>
+</div>
+
+<div class="summary-box">
+<h4>📦 本章总结</h4>
+<p>本章我们从一个真实的驱动故障场景切入，构建了一个完整的字符设备驱动认知框架。你学到了：</p>
+<ol>
+<li><strong>核心链路</strong>：用户空间系统调用 → VFS → `file_operations` → 驱动函数 → 硬件。</li>
+<li><strong>三大支柱</strong>：`file_operations`（操作集）、`cdev`（设备对象）、设备文件（用户接口）。</li>
+<li><strong>关键API</strong>：`alloc_chrdev_region`、`cdev_init`、`cdev_add`、`copy_to/from_user`。</li>
+<li><strong>完整流程</strong>：编写驱动 → 编译为 `.ko` → `insmod` 加载 → `mknod` 创建设备文件 → 用户程序测试 → `rmmod` 卸载。</li>
+<li><strong>避坑指南</strong>：用户空间指针必须通过拷贝函数访问；注意内核版本差异导致的 API 变化；动态分配设备号更通用。</li>
+</ol>
+
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <span class="nav-placeholder"></span>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="02.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第1章 —</div>
+    </div>
+</body>
+</html>

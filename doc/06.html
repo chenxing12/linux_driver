@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第6章 平台设备驱动模型</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第6章 平台设备驱动模型</h2></div>
+
+<div class="chapter-guide">
+  <div class="guide-meta">
+    <span class="guide-meta-item"><span class="difficulty-tag diff-beginner">入门</span></span>
+    <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握字符设备驱动基础，想理解SoC片上外设如何管理</span>
+    <span class="guide-meta-item"><span class="meta-icon">🔧</span> 为嵌入式设备（如ARM SoC）编写GPIO、I2C控制器等片上外设驱动</span>
+  </div>
+  <div class="guide-body">
+    <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>平台设备与平台驱动的核心概念与匹配机制</li><li>如何编写一个完整的平台设备驱动框架代码</li><li>平台数据与资源（内存、中断）的传递与获取方法</li></ul></div>
+    <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">platform_device</span><span class="guide-concept-tag">platform_driver</span></div>
+  </div>
+</div>
+
+<p>想象一下，你买了一套精装修的房子，开发商已经预埋好了水管、电线、网线接口（这些是<strong>平台设备</strong>），你只需要购买对应的热水器、路由器（这些是<strong>平台驱动</strong>）插上去就能用，而不需要自己凿墙布线。在Linux内核中，<strong>平台设备驱动模型</strong>就是用来管理那些集成在CPU芯片内部或板级固定的“基础设施”外设，比如集成在ARM SoC上的GPIO控制器、I2C总线控制器、定时器等。</p>
+
+<div class="concept-block">
+<h4>平台设备 (Platform Device)</h4>
+<p><strong>生活类比</strong>：就像主板上焊死的一个USB控制器芯片，位置和功能固定，无法热插拔。<br>
+<strong>技术定义</strong>：代表系统中物理上不可移除或位置固定的设备，通常通过<code>struct platform_device</code>结构体描述，包含设备名称、ID、资源（内存地址、中断号）等信息。</p>
+</div>
+
+<div class="concept-block">
+<h4>平台驱动 (Platform Driver)</h4>
+<p><strong>生活类比</strong>：就像这个USB控制器的驱动程序，知道如何操作这个固定位置的芯片。<br>
+<strong>技术定义</strong>：用于驱动平台设备的驱动程序，通过<code>struct platform_driver</code>结构体描述，包含驱动名称、探测(<code>probe</code>)、移除(<code>remove</code>)等回调函数。</p>
+</div>
+
+<p>这个模型的核心是“匹配然后探测”。内核启动时，会注册所有已知的平台设备。当你加载一个平台驱动模块时，内核会遍历设备列表，根据名称或兼容性字符串进行匹配。一旦匹配成功，就调用驱动的<code>probe()</code>函数来初始化设备。</p>
+
+<h3>平台驱动模型的核心数据结构</h3>
+<p>理解平台驱动，首先要看懂两个核心结构体。下面的表格清晰地展示了它们的关键成员和用途。</p>
+
+<table>
+<thead><tr><th>结构体</th><th>关键成员</th><th>作用描述</th><th>类比</th></tr></thead>
+<tbody>
+<tr><td rowspan="4"><code>platform_device</code></td><td><code>const char *name</code></td><td>设备名称，用于与驱动匹配的基础</td><td rowspan="4">设备的“身份证”和“财产清单”</td></tr>
+<tr><td><code>int id</code></td><td>设备ID，用于区分同名设备</td></tr>
+<tr><td><code>struct resource *resource</code></td><td>设备资源数组（内存、中断）</td></tr>
+<tr><td><code>void *platform_data</code></td><td>指向设备私有数据的指针</td></tr>
+<tr><td rowspan="4"><code>platform_driver</code></td><td><code>const char *name</code></td><td>驱动名称，用于与设备匹配</td><td rowspan="4">驱动程序的“简历”和“操作手册”</td></tr>
+<tr><td><code>int (*probe)(struct platform_device *)</code></td><td>探测函数，匹配成功后调用</td></tr>
+<tr><td><code>int (*remove)(struct platform_device *)</code></td><td>移除函数，驱动卸载或设备移除时调用</td></tr>
+<tr><td><code>const struct of_device_id *of_match_table</code></td><td>设备树匹配表（下一章详解）</td></tr>
+</tbody>
+</table>
+
+<p>在实际开发中，大部分团队会选择使用设备树（Device Tree）来静态声明平台设备，这比在内核代码中硬编码<code>platform_device</code>更灵活。但为了理解原理，我们先看一个传统的、通过C代码注册平台设备的流程。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">板级初始化代码</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node secondary">注册 platform_device</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node accent">内核设备列表</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node primary">驱动模块加载</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node secondary">注册 platform_driver</div>
+    <span class="arch-connector">↗</span>
+  </div>
+  <div class="arch-row">
+    <div class="arch-node accent">匹配成功</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node primary">调用 probe() 函数</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node secondary">设备初始化完成</div>
+  </div>
+</div>
+
+<h3>动手写一个简单的平台驱动</h3>
+<p>我们以一个虚拟的“LED控制器”为例，假设它映射在物理地址<code>0x10000000</code>，长度为<code>0x1000</code>，使用中断号<code>101</code>。</p>
+
+<p>首先，我们需要定义平台设备及其资源。在早期的内核或某些特定板级文件中，你会看到这样的代码：</p>
+
+<pre><code><span class="cmt">/* 1. 定义设备资源：内存区域和中断 */</span>
+<span class="kw">static struct resource</span> fake_led_resources[] = {
+    {
+        .start = <span class="num">0x10000000</span>,
+        .end   = <span class="num">0x10000FFF</span>,
+        .flags = IORESOURCE_MEM, <span class="cmt">// 内存资源</span>
+    },
+    {
+        .start = <span class="num">101</span>,
+        .end   = <span class="num">101</span>,
+        .flags = IORESOURCE_IRQ, <span class="cmt">// 中断资源</span>
+    },
+};
+
+<span class="cmt">/* 2. 定义平台设备 */</span>
+<span class="kw">static struct platform_device</span> fake_led_device = {
+    .name = <span class="str">"my_led_ctrl"</span>, <span class="cmt">// 关键匹配名</span>
+    .id   = -<span class="num">1</span>, <span class="cmt">// 只有一个设备，用-1</span>
+    .num_resources = ARRAY_SIZE(fake_led_resources),
+    .resource = fake_led_resources,
+    <span class="cmt">// .dev.platform_data 可以传递私有数据</span>
+};
+
+<span class="cmt">/* 3. 在板级初始化函数中注册设备 */</span>
+<span class="func">platform_device_register</span>(&fake_led_device);</code></pre>
+
+<p>接下来是驱动部分。驱动模块需要实现<code>platform_driver</code>，并在<code>probe</code>函数中获取设备资源。</p>
+
+<pre><code><span class="cmt">#include &lt;linux/platform_device.h&gt;</span>
+<span class="cmt">#include &lt;linux/io.h&gt;</span>
+
+<span class="kw">static int</span> <span class="func">fake_led_probe</span>(<span class="kw">struct platform_device</span> *pdev)
+{
+    <span class="kw">struct resource</span> *mem_res;
+    <span class="kw">struct resource</span> *irq_res;
+    <span class="kw">void __iomem</span> *reg_base;
+    <span class="kw">int</span> irq_num;
+
+    <span class="cmt">// 获取内存资源</span>
+    mem_res = <span class="func">platform_get_resource</span>(pdev, IORESOURCE_MEM, <span class="num">0</span>);
+    <span class="kw">if</span> (!mem_res) {
+        <span class="func">dev_err</span>(&pdev->dev, <span class="str">"Failed to get MEM resource\n"</span>);
+        <span class="kw">return</span> -ENXIO;
+    }
+
+    <span class="cmt">// 将物理地址映射到内核虚拟地址空间</span>
+    reg_base = <span class="func">devm_ioremap_resource</span>(&pdev->dev, mem_res);
+    <span class="kw">if</span> (<span class="func">IS_ERR</span>(reg_base))
+        <span class="kw">return</span> <span class="func">PTR_ERR</span>(reg_base);
+
+    <span class="cmt">// 获取中断资源</span>
+    irq_res = <span class="func">platform_get_resource</span>(pdev, IORESOURCE_IRQ, <span class="num">0</span>);
+    <span class="kw">if</span> (!irq_res) {
+        <span class="func">dev_err</span>(&pdev->dev, <span class="str">"Failed to get IRQ resource\n"</span>);
+        <span class="kw">return</span> -ENXIO;
+    }
+    irq_num = irq_res->start;
+
+    <span class="func">dev_info</span>(&pdev->dev, <span class="str">"Probe success! Reg base=%px, IRQ=%d\n"</span>, reg_base, irq_num);
+    <span class="cmt">// 后续：申请中断、初始化硬件、注册字符设备等...</span>
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+
+<span class="kw">static int</span> <span class="func">fake_led_remove</span>(<span class="kw">struct platform_device</span> *pdev)
+{
+    <span class="func">dev_info</span>(&pdev->dev, <span class="str">"Device removed\n"</span>);
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+
+<span class="cmt">/* 定义平台驱动结构体 */</span>
+<span class="kw">static struct platform_driver</span> fake_led_driver = {
+    .driver = {
+        .name = <span class="str">"my_led_ctrl"</span>, <span class="cmt">// 必须与 platform_device.name 一致</span>
+        .owner = THIS_MODULE,
+    },
+    .probe  = fake_led_probe,
+    .remove = fake_led_remove,
+};
+
+<span class="cmt">/* 模块加载和卸载函数 */</span>
+<span class="func">module_platform_driver</span>(fake_led_driver); <span class="cmt">// 这个宏简化了注册和注销</span>
+
+<span class="func">MODULE_LICENSE</span>(<span class="str">"GPL"</span>);
+<span class="func">MODULE_AUTHOR</span>(<span class="str">"Your Name"</span>);</code></pre>
+
+<div class="key-point">
+<h4>关键点：platform_get_resource 与 devm_ioremap_resource</h4>
+<p>在<code>probe</code>函数中，<code>platform_get_resource()</code>是获取设备预定义资源（内存、中断）的标准方法。而<code>devm_ioremap_resource()</code>是更安全的内存映射函数，它自动管理映射生命周期（当设备或驱动卸载时自动取消映射），我在项目中踩过忘记<code>iounmap</code>导致内存泄漏的坑，强烈推荐使用<code>devm_</code>系列托管函数。</p>
+</div>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区</h4>
+<ul>
+<li><strong>匹配失败</strong>：最常见的问题是<code>platform_device.name</code>和<code>platform_driver.driver.name</code>不匹配，或者设备根本没有被注册到内核。加载驱动后<code>probe</code>没被调用，首先检查<code>/sys/bus/platform/devices/</code>下有没有你的设备。</li>
+<li><strong>资源获取失败</strong>：<code>platform_get_resource</code>返回NULL。检查设备定义中的资源数组索引是否正确，第一个资源的索引是0。我曾把IORESOURCE_MEM和IORESOURCE_IRQ的顺序搞反，调试了半天。</li>
+<li><strong>地址映射错误</strong>：使用<code>ioremap</span>后忘记<code>iounmap</code>，或者映射地址范围超出实际物理地址。对于内存映射，优先使用<code>devm_ioremap_resource()</code>，它内部会进行资源有效性检查。</li>
+</ul>
+</div>
+
+<h3>平台数据：传递自定义参数</h3>
+<p>有时候，驱动需要一些硬件配置参数，比如LED的默认亮度、GPIO的极性等。这些不适合放在标准资源里，可以通过<code>platform_data</code>传递。</p>
+
+<div class="flowchart">
+  <div class="flow-step">定义私有数据结构体</div><span class="flow-arrow">→</span>
+  <div class="flow-step">填充数据并赋值给 platform_device.dev.platform_data</div><span class="flow-arrow">→</span>
+  <div class="flow-step">在驱动的probe函数中通过 pdev->dev.platform_data 获取</div>
+</div>
+
+<pre><code><span class="cmt">/* 设备端：定义并传递数据 */</span>
+<span class="kw">struct</span> my_led_platform_data {
+    <span class="kw">int</span> default_brightness;
+    <span class="kw">bool</span> active_low;
+};
+
+<span class="kw">static struct</span> my_led_platform_data led_data = {
+    .default_brightness = <span class="num">50</span>,
+    .active_low = <span class="kw">true</span>,
+};
+
+<span class="kw">static struct platform_device</span> fake_led_device = {
+    .name = <span class="str">"my_led_ctrl"</span>,
+    .id = -<span class="num">1</span>,
+    .dev = {
+        .platform_data = &led_data, <span class="cmt">// 传递私有数据</span>
+    },
+};
+
+<span class="cmt">/* 驱动端：接收并使用数据 */</span>
+<span class="kw">static int</span> <span class="func">fake_led_probe</span>(<span class="kw">struct platform_device</span> *pdev)
+{
+    <span class="kw">struct</span> my_led_platform_data *pdata = <span class="func">dev_get_platdata</span>(&pdev->dev);
+    <span class="cmt">// 或者直接使用 pdev->dev.platform_data (需要类型转换)</span>
+
+    <span class="kw">if</span> (pdata) {
+        <span class="func">printk</span>(<span class="str">"Default brightness: %d, Active low: %d\n"</span>,
+               pdata->default_brightness, pdata->active_low);
+    }
+    <span class="kw">return</span> <span class="num">0</span>;
+}</code></pre>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：平台数据(<code>platform_data</code>)是一种传统的、基于C代码的配置方式。尤其是ARM体系架构，<strong>设备树(Device Tree)</strong>已经全面取代了它，成为描述硬件配置的标准方式。设备树可以更清晰、更灵活地描述硬件资源和属性。我们将在下一章《设备树DTS语法解析》中深入探讨。</p>
+</div>
+
+<h3>现代内核：从平台数据到设备树</h3>
+<p>虽然本章重点讲解传统的平台设备模型，但你必须知道现代的标准做法。设备树通过<code>.dts</code>文件描述硬件，驱动通过<code>of_match_table</code>进行匹配，并使用Device Tree API（如<code>of_property_read_u32()</code>）读取属性。</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>传统方式 (Legacy)</h4><ul><li>硬件信息硬编码在内核C文件</li><li>使用 <code>platform_device</code>/<code>platform_data</code></li><li>修改硬件需重新编译内核</li><li>适用于简单、固定的x86 PC架构</li></ul></div>
+  <div class="scenario-card green"><h4>设备树方式 (Modern)</h4><ul><li>硬件信息写在独立的.dts文件</li><li>驱动通过 <code>of_match_table</code> 匹配</li><li>使用 <code>of_</code> 系列API获取资源</li><li>ARM/MIPS/嵌入式系统事实标准</li></ul></div>
+</div>
+
+<p>一个现代的平台驱动，其驱动结构体通常会同时支持两种匹配方式，但以设备树为主：</p>
+
+<pre><code><span class="kw">static const struct of_device_id</span> my_led_of_match[] = {
+    { .compatible = <span class="str">"vendor,my-led-ctrl"</span> }, <span class="cmt">// 与设备树节点匹配</span>
+    {},
+};
+<span class="func">MODULE_DEVICE_TABLE</span>(of, my_led_of_match);
+
+<span class="kw">static struct platform_driver</span> fake_led_driver = {
+    .driver = {
+        .name = <span class="str">"my_led_ctrl"</span>,
+        .of_match_table = of_match_ptr(my_led_of_match), <span class="cmt">// 设备树匹配表</span>
+    },
+    .probe = fake_led_probe,
+    .remove = fake_led_remove,
+};</code></pre>
+
+<p>在<code>probe</code>函数中，你可以通过<code>pdev->dev.of_node</code>获取设备树节点，然后解析属性。实际开发中，对于新的ARM平台（如NXP i.MX系列、TI AM335x、Rockchip RK系列），你必须使用设备树。</p>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1. <strong>模拟实验</strong>：在QEMU或你的开发板上（如树莓派），创建一个最简单的平台驱动模块。不访问真实硬件，只在<code>probe</code>函数中打印一条信息（如“My Platform Driver Probed!”）。通过<code>insmod</code>加载，观察内核日志(<code>dmesg</code>)，确认<code>probe</code>是否被调用。<br>
+2. <strong>代码阅读</strong>：在内核源码中（如<code>drivers/leds/leds-gpio.c</code>）找一个真实的平台驱动例子，跟踪它的<code>platform_driver</code>定义、<code>probe</code>函数实现，看它如何获取资源（内存、中断、GPIO号）。<br>
+3. <strong>资源获取</strong>：修改你的驱动，假设你的设备需要两个内存区域（例如寄存器区和数据缓冲区），在<code>probe</code>中练习使用<code>platform_get_resource</code>分别获取它们，并打印出起始地址和长度。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>平台设备(<code>platform_device</code>)和普通的字符设备有什么区别？它通常代表哪一类硬件？</li>
+<li>驱动模块加载时，内核是如何将<code>platform_driver</code>和<code>platform_device</code>关联起来的？关键匹配依据是什么？</li>
+<li>在驱动的<code>probe</code>函数中，如果要获取设备声明的一段内存资源（IORESOURCE_MEM），应该使用哪个API函数？如果获取中断号呢？</li>
+<li><code>devm_ioremap_resource()</code>相比旧的<code>ioremap()</code>有什么优点？</li>
+<li>除了标准资源（内存、中断），如果驱动需要一个配置参数（比如时钟频率），有哪两种方式可以传递这个参数？现代内核推荐哪种？</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li><strong>平台设备模型</strong>用于管理CPU集成或板级固定的外设，核心是<code>platform_device</code>（描述设备）和<code>platform_driver</code>（驱动设备）的匹配与探测机制。</li>
+<li><strong>匹配与探测</strong>：驱动通过名称与设备匹配，成功后内核自动调用驱动的<code>probe()</code>函数进行初始化，这是驱动执行的起点。</li>
+<li><strong>资源管理</strong>：使用<code>platform_get_resource()</code>从设备获取预定义的内存、中断等资源；使用<code>devm_ioremap_resource()</code>等托管函数进行资源映射，可以自动释放，避免泄漏。</li>
+<li><strong>数据传递</strong>：可通过<code>platform_data</code>传递设备私有数据，但现代嵌入式开发中，这已被更灵活、标准的<strong>设备树(Device Tree)</strong>所取代。</li>
+<li><strong>开发模式</strong>：传统x86架构可能仍用C代码硬编码设备，而ARM等嵌入式架构已全面转向设备树描述硬件，驱动需通过<code>of_match_table</code>匹配并解析设备树节点。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="05.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="07.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第6章 —</div>
+    </div>
+</body>
+</html>

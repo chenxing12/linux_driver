@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第22章 电源管理PM框架</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第22章 电源管理PM框架</h2></div>
+
+<div class="chapter-guide">
+    <div class="guide-meta">
+      <span class="guide-meta-item"><span class="difficulty-tag diff-intermediate">进阶</span></span>
+      <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握基础设备驱动开发的工程师</span>
+      <span class="guide-meta-item"><span class="meta-icon">🔧</span> 为移动设备、嵌入式系统开发低功耗驱动</span>
+    </div>
+    <div class="guide-body">
+      <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>Linux内核PM框架的核心概念与工作流程</li><li>如何为设备实现runtime PM和系统级休眠唤醒</li><li>常见电源状态转换的代码实现与调试方法</li></ul></div>
+      <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">Runtime PM</span><span class="guide-concept-tag">系统休眠</span></div>
+    </div>
+  </div>
+
+<p>凌晨三点，你被手机警报吵醒：产线测试报告显示，基于i.MX8MM处理器的智能门锁样机，在待机一周后电量耗尽，远低于设计目标。你打开串口日志，发现设备从未进入深度休眠。这个问题指向一个关键领域：内核电源管理。</p>
+
+<p>Linux电源管理框架负责协调CPU、总线和外设，在系统空闲或用户操作时动态调整功耗。它不是一个单一的驱动，而是一套贯穿内核子系统的协作机制。实际项目中，电源管理没做好，产品就可能变成“电老虎”。</p>
+
+<h3>PM框架的两种模式与架构</h3>
+
+<p>内核PM主要处理两类场景：一是系统全局的休眠与唤醒（如挂起到内存S3），二是单个设备在运行时的电源状态管理。你可以把前者想象成让整栋大楼熄灯关门（系统休眠），后者则是根据房间是否有人自动开关灯和空调（设备运行时管理）。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">用户空间<br>(echo mem > /sys/power/state)</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node secondary">PM核心<br>(suspend.c, resume.c)</div>
+  </div>
+  <div class="arch-row">
+    <span class="arch-connector">↙</span>
+    <span class="arch-connector" style="margin-left: 60px;">↘</span>
+  </div>
+  <div class="arch-row">
+    <div class="arch-node accent">系统级PM<br>(休眠/唤醒流程)</div>
+    <span class="arch-connector" style="margin-right: 40px;"> </span>
+    <div class="arch-node accent">运行时PM<br>(Runtime PM)</div>
+  </div>
+  <div class="arch-row">
+    <span class="arch-connector">↓</span>
+    <span class="arch-connector" style="margin-left: 60px;">↓</span>
+  </div>
+  <div class="arch-row">
+    <div class="arch-node secondary">平台/总线PM Ops<br>(suspend_noirq, resume_early)</div>
+    <span class="arch-connector" style="margin-right: 40px;"> </span>
+    <div class="arch-node secondary">设备驱动PM Ops<br>(runtime_suspend/resume)</div>
+  </div>
+  <div class="arch-row">
+    <span class="arch-connector">↓</span>
+    <span class="arch-connector" style="margin-left: 60px;">↓</span>
+  </div>
+  <div class="arch-row">
+    <div class="arch-node primary">硬件寄存器操作<br>(关闭时钟、降低电压)</div>
+    <span class="arch-connector" style="margin-right: 40px;"> </span>
+    <div class="arch-node primary">设备电源状态切换<br>(切到低功耗模式)</div>
+  </div>
+</div>
+
+<p>这个架构图展示了PM框架的分层协作。用户空间的休眠指令触发核心流程，核心层依次调用总线、平台和具体设备的回调函数。我在调试RK3566平台的休眠问题时发现，一个设备的回调函数卡住，整个系统唤醒就会延迟数百毫秒。</p>
+
+<div class="key-point">
+<h4>关键点：系统休眠状态</h4>
+<p>Linux定义了多种系统全局电源状态，对应ACPI标准的S0-S5。驱动开发者最常打交道的是S3（挂起到内存）和S4（挂起到磁盘）。对于嵌入式Linux，我们通常使用<code>mem</code>（对应S3）和<code>disk</code>（对应S4）来触发。例如，在终端执行 <code>sudo echo mem > /sys/power/state</code> 即可尝试挂起到内存。</p>
+</div>
+
+<h3>为设备实现Runtime PM</h3>
+
+<p>Runtime PM允许内核在设备空闲时自动将其挂起，有I/O请求时再恢复。这是降低设备动态功耗的关键。实现它主要分为三个步骤：初始化、提供回调函数、管理引用计数。</p>
+
+<div class="flowchart">
+  <div class="flow-step">1. 初始化<br>pm_runtime_enable()</div><span class="flow-arrow">→</span>
+  <div class="flow-step">2. 设置空闲超时<br>pm_runtime_set_autosuspend_delay()</div><span class="flow-arrow">→</span>
+  <div class="flow-step">3. 启用自动挂起<br>pm_runtime_use_autosuspend()</div><span class="flow-arrow">→</span>
+  <div class="flow-step">4. 驱动I/O操作<br>pm_runtime_get_sync() / put()</div>
+</div>
+
+<p>下面是一个I2C传感器驱动实现Runtime PM的骨架代码：</p>
+
+<pre><code><span class="cmt">/* 1. 定义电源管理操作集 */</span>
+<span class="kw">static const struct</span> dev_pm_ops sensor_pm_ops = {
+    .runtime_suspend = sensor_runtime_suspend,
+    .runtime_resume = sensor_runtime_resume,
+    <span class="cmt">/* 系统休眠相关的回调后面会讲 */</span>
+};
+
+<span class="cmt">/* 2. 在驱动probe函数中初始化PM */</span>
+<span class="kw">static int</span> <span class="func">sensor_probe</span>(<span class="kw">struct</span> i2c_client *client) {
+    <span class="kw">struct device</span> *dev = &client->dev;
+    ...
+    <span class="func">pm_runtime_enable</span>(dev);
+    <span class="cmt">// 设置空闲2秒后自动挂起</span>
+    <span class="func">pm_runtime_set_autosuspend_delay</span>(dev, <span class="num">2000</span>);
+    <span class="func">pm_runtime_use_autosuspend</span>(dev);
+    <span class="cmt">// 初始状态设为活跃（非挂起）</span>
+    <span class="func">pm_runtime_set_active</span>(dev);
+    ...
+}
+
+<span class="cmt">/* 3. 实现挂起/恢复回调 */</span>
+<span class="kw">static int</span> <span class="func">sensor_runtime_suspend</span>(<span class="kw">struct device</span> *dev) {
+    <span class="kw">struct</span> i2c_client *client = <span class="func">to_i2c_client</span>(dev);
+    <span class="cmt">// 关闭传感器电源，或切到最低功耗模式</span>
+    <span class="func">regmap_write</span>(sensor->regmap, REG_PWR_CTL, PWR_STANDBY);
+    <span class="cmt">// 可选：关闭I2C总线时钟（需与总线驱动协调）</span>
+    <span class="func">clk_disable_unprepare</span>(sensor->clk);
+    <span class="kw">return</span> <span class="num">0</span>;
+}
+
+<span class="cmt">/* 4. 在数据读写函数中管理引用计数 */</span>
+<span class="kw">static int</span> <span class="func">sensor_read_data</span>(<span class="kw">struct</span> sensor_dev *s) {
+    <span class="kw">int</span> ret;
+    ret = <span class="func">pm_runtime_get_sync</span>(&s->client->dev);
+    <span class="kw">if</span> (ret < <span class="num">0</span>) {
+        <span class="cmt">// 唤醒设备失败</span>
+        <span class="kw">return</span> ret;
+    }
+    <span class="cmt">// 此时设备已唤醒，可以安全进行I2C读写</span>
+    ret = <span class="func">i2c_smbus_read_byte_data</span>(s->client, REG_DATA);
+    <span class="cmt">// 操作完成，释放引用，可能触发自动挂起计时</span>
+    <span class="func">pm_runtime_mark_last_busy</span>(&s->client->dev);
+    <span class="func">pm_runtime_put_autosuspend</span>(&s->client->dev);
+    <span class="kw">return</span> ret;
+}</code></pre>
+
+<p><code>pm_runtime_get_sync</code>会增加设备的使用计数并确保设备唤醒，<code>pm_runtime_put_autosuspend</code>则减少计数并启动一个定时器，超时后内核会调用你的<code>runtime_suspend</code>。这里有个隐藏的坑：<code>pm_runtime_get_sync</code>在设备挂起失败时会返回错误码，你的驱动必须处理这个错误，而不是假设设备总是可用的。</p>
+
+<div class="tip-box warning">
+<h4>常见误区</h4>
+<ul>
+<li><strong>忘记调用 `pm_runtime_mark_last_busy`</strong>：这会导致自动挂起计时器从设备初始化时开始计算，而不是从最后一次操作后，可能使设备过早进入休眠。</li>
+<li><strong>在中断处理程序中调用PM函数</strong>：<code>pm_runtime_get/put</code>可能休眠，绝对不能在原子上下文中使用。如果需要，应使用其异步版本或在工作队列中处理。</li>
+<li><strong>电源状态与时钟管理不同步</strong>：在<code>runtime_suspend</code>中关闭了时钟，但在<code>runtime_resume</code>中忘记重新使能，导致设备“睡死”。</li>
+</ul>
+</div>
+
+<h3>实现系统休眠支持</h3>
+
+<p>当系统进入S3/S4状态时，内核会调用一套更复杂的回调链。你需要扩展之前的<code>dev_pm_ops</code>，实现<code>suspend</code>、<code>resume</code>及其变体。它们的调用顺序有严格规定。</p>
+
+<table>
+<thead>
+<tr><th>回调函数</th><th>调用时机</th><th>典型操作</th><th>可否休眠</th></tr>
+</thead>
+<tbody>
+<tr><td><code>.suspend</code></td><td>休眠过程早期，设备仍可访问</td><td>保存易失性寄存器配置</td><td>可以</td></tr>
+<tr><td><code>.suspend_late</code></td><td>大部分子系统已休眠</td><td>将设备置为最低功耗状态</td><td>可以</td></tr>
+<tr><td><code>.suspend_noirq</code></td><td>中断已禁用，紧接在最后</td><td>关闭设备时钟/电源域</td><td><strong>不可以</strong></td></tr>
+<tr><td><code>.resume_noirq</code></td><td>唤醒最早阶段，中断仍禁用</td><td>恢复时钟/电源域</td><td><strong>不可以</strong></td></tr>
+<tr><td><code>.resume_early</code></td><td>早期唤醒阶段</td><td>将设备切回可操作状态</td><td>可以</td></tr>
+<tr><td><code>.resume</code></td><td>唤醒后期，系统基本恢复</td><td>恢复寄存器配置</td><td>可以</td></tr>
+</tbody>
+</table>
+
+<p>一个关键原则：<code>noirq</code>（“黑暗”）阶段的回调运行在中断禁用的上下文中，<strong>绝对不能</strong>进行可能休眠的操作，如互斥锁、I2C读写、内存分配等。我在为一个PCIe网卡驱动实现休眠时，曾在<code>suspend_noirq</code>中调用了<code>msleep</code>，导致内核死锁，调试了整整一天。</p>
+
+<div class="concept-block">
+<h4>概念：唤醒源（Wakeup Source）</h4>
+<p><strong>生活类比</strong>：就像你设置了闹钟（唤醒源）叫醒熟睡的自己（系统）。<strong>技术定义</strong>：唤醒源是一个能够将系统从休眠状态（如S3）触发回运行状态（S0）的硬件事件或信号。常见的有GPIO中断、RTC闹钟、网络数据包（WOL）等。</p>
+<p>在驱动中，你需要明确告知内核你的设备是否具备唤醒能力，并在休眠前启用它。例如，一个触摸屏驱动在系统休眠后，需要能通过触摸中断唤醒系统。</p>
+</div>
+
+<p>启用唤醒源的代码示例如下：</p>
+
+<pre><code><span class="kw">static int</span> <span class="func">touch_suspend</span>(<span class="kw">struct device</span> *dev) {
+    ...
+    <span class="cmt">// 1. 告知内核本设备可唤醒系统，并分配唤醒源</span>
+    <span class="kw">if</span> (!device_can_wakeup(dev)) {
+        device_init_wakeup(dev, <span class="num">true</span>);
+    }
+    <span class="cmt">// 2. 配置硬件产生唤醒中断（如使能触摸中断）</span>
+    <span class="func">enable_irq_wake</span>(touch->irq);
+    <span class="cmt">// 3. 在休眠前启用该唤醒源</span>
+    <span class="kw">return</span> <span class="func">pm_system_wakeup_enabled</span>(touch->ws, <span class="num">true</span>);
+}
+
+<span class="kw">static int</span> <span class="func">touch_resume</span>(<span class="kw">struct device</span> *dev) {
+    ...
+    <span class="cmt">// 唤醒后，禁用唤醒源并恢复硬件中断设置</span>
+    <span class="func">pm_system_wakeup_enabled</span>(touch->ws, <span class="num">false</span>);
+    <span class="func">disable_irq_wake</span>(touch->irq);
+    ...
+}</code></pre>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：配置唤醒源经常涉及GPIO和中断的底层操作。如果你对<code>enable_irq_wake</code>的底层机制或GPIO子系统不熟悉，建议回顾第5章《中断处理程序设计》和第20章《GPIO与Pinctrl子系统》的相关内容。</p>
+</div>
+
+<h3>调试PM问题</h3>
+
+<p>PM问题难以复现，依赖有效的调试手段。内核提供了丰富的sysfs接口和跟踪点。</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>查看设备PM状态</h4><ul><li><code>/sys/devices/.../power/runtime_status</code>: 显示 “active”, “suspended”, “error”等。</li><li><code>/sys/devices/.../power/control</code>: 可手动写入 “on”, “auto”。</li><li><code>/sys/kernel/debug/pm_runtime/</code>: 内核需开启<code>CONFIG_PM_ADVANCED_DEBUG</code>。</li></ul></div>
+  <div class="scenario-card green"><h4>分析休眠唤醒失败</h4><ul><li><code>dmesg | grep -E \"(PM:|suspend|resume)\"</code> 过滤相关日志。</li><li>在<code>/sys/power/pm_print_times</code>写入1，打印各阶段耗时。</li><li>使用<code>ftrace</code>跟踪<code>pm_runtime*</code>和<code>suspend*</code>函数调用流。</li></ul></div>
+  <div class="scenario-card purple"><h4>测量功耗</h4><ul><li>硬件：使用精密电源表（如Keysight N6705）监测电流曲线。</li><li>软件：通过<code>/sys/class/power_supply/</code>读取电池信息（如有）。</li><li>目标：对比驱动实现PM前后，设备静态电流（如从15mA降至200μA）。</li></ul></div>
+</div>
+
+<p>一个典型的调试命令流：首先 <code>echo 1 > /sys/power/pm_print_times</code>，然后触发休眠 <code>echo mem > /sys/power/state</code>，唤醒后查看dmesg，你会看到类似下面的耗时信息，帮助你定位瓶颈：</p>
+<pre><code>[  125.367] PM: suspend entry (deep)
+[  125.371] PM: suspend devices took 0.004 seconds
+[  125.872] PM: late suspend devices took 0.500 seconds <span class="cmt"># 这里耗时异常长！</span>
+[  125.873] PM: noirq suspend devices took 0.001 seconds</code></pre>
+
+<p>如果发现某个阶段耗时异常，比如上面的`late suspend`花了0.5秒，你就可以集中检查在该阶段被调用的驱动回调函数。</p>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1.  <strong>为虚拟设备添加Runtime PM</strong>：基于一个简单的字符设备驱动框架（例如一个只读的虚拟传感器），为其实现Runtime PM支持。在<code>/sys/class/</code>下找到你的设备节点，观察<code>runtime_status</code>的变化，并通过连续读取设备文件触发其唤醒与挂起。</p>
+<p>2.  <strong>模拟系统休眠</strong>：在开发板（如树莓派或i.MX6ULL）上，编写一个简单的平台驱动，实现<code>suspend</code>和<code>resume</code>回调，并在其中打印日志。然后执行<code>echo mem > /sys/power/state</code>让系统休眠，再通过按键唤醒，查看你的驱动日志是否被正确打印。</p>
+<p>3.  <strong>调试唤醒源</strong>：找一个支持GPIO按键唤醒的开发板，编写一个按键驱动，将其配置为唤醒源。让系统进入休眠，然后按下该按键，检查系统是否能被成功唤醒，并在驱动日志中记录唤醒事件。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>Runtime PM中的<code>pm_runtime_put_autosuspend()</code>和<code>pm_runtime_put()</code>有什么区别？在什么场景下应该使用前者？</li>
+<li>系统休眠流程中，<code>.suspend_noirq</code>回调函数可以调用<code>i2c_transfer()</code>来保存设备寄存器吗？为什么？</li>
+<li>如果一个设备驱动实现了Runtime PM，但没有实现系统休眠回调（如<code>.suspend</code>），当系统整体进入S3状态时，这个设备会发生什么？</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li>Linux电源管理框架分为<strong>运行时PM</strong>（管理单个设备空闲状态）和<strong>系统级PM</strong>（管理全局休眠唤醒）两套协作机制。</li>
+<li>实现Runtime PM的核心是初始化、提供<code>runtime_suspend/resume</code>回调，并在驱动I/O路径中使用<code>pm_runtime_get_sync/put_autosuspend</code>正确管理设备引用计数。</li>
+<li>实现系统休眠支持需要填充<code>dev_pm_ops</code>中的一系列回调（如<code>suspend</code>, <code>resume_noirq</code>），并严格遵守其调用上下文（特别是<code>noirq</code>阶段不可休眠）。</li>
+<li><strong>唤醒源</strong>是设备将系统从休眠状态唤醒的能力，需要在驱动中通过<code>device_init_wakeup</code>和<code>enable_irq_wake</code>等API显式配置。</li>
+<li>调试PM问题主要依靠sysfs状态查询、内核日志时间戳分析以及<code>ftrace</code>跟踪，目标是定位耗时的回调或失败的状态转换。</li>
+</ul>
+</div>
+
+</div>
+        
+        <div class="chapter-nav">
+            <a href="21.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="23.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第22章 —</div>
+    </div>
+</body>
+</html>

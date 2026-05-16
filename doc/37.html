@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第37章 驱动安全编码规范</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第37章 驱动安全编码规范</h2></div>
+
+<div class="chapter-guide">
+  <div class="guide-meta">
+    <span class="guide-meta-item"><span class="difficulty-tag diff-advanced">高级</span></span>
+    <span class="guide-meta-item"><span class="meta-icon">👤</span> 已有驱动开发基础，希望提升代码健壮性与安全性的工程师</span>
+    <span class="guide-meta-item"><span class="meta-icon">🔧</span> 编写长期稳定运行、需抵御恶意输入或复杂环境的工业级驱动</span>
+  </div>
+  <div class="guide-body">
+    <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>内核驱动中常见的安全漏洞类型与成因</li><li>利用内核内置机制进行输入验证与边界检查</li><li>安全的内存管理和资源释放模式</li></ul></div>
+    <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">漏洞缓解</span><span class="guide-concept-tag">防御性编程</span></div>
+  </div>
+</div>
+
+<p>凌晨三点，你的手机响了。运维同事告诉你，部署在边缘网关的定制网卡驱动崩溃了，内核日志里留下一串“general protection fault”和一堆乱码。你远程登录上去，发现是用户空间程序传了一个超长的字符串到驱动的<code>ioctl</code>命令里，直接冲垮了栈上的缓冲区。这不是性能问题，而是安全问题。驱动运行在内核态，一个微小的编码疏忽就可能导致整个系统崩溃或被提权。</p>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区</h4>
+<ul>
+<li><strong>“我的驱动只给内部用，不需要安全检查。”</strong>：内部程序也可能有bug，恶意数据可能通过网络或存储介质间接传入。</li>
+<li><strong>“用户传错参数，崩溃是他的问题。”</strong>：内核驱动崩溃会影响整个系统上所有进程，责任在驱动开发者。</li>
+<li><strong>“用<code>copy_from_user</code>复制过来就安全了。”</strong>：这只是完成了数据拷贝，对数据内容的有效性和边界没有任何检查。</li>
+</ul>
+</div>
+
+<h3>内核驱动的攻击面与漏洞分类</h3>
+<p>驱动是用户空间与硬件之间的桥梁，也是内核暴露给用户的主要接口之一。攻击者会尝试通过这个接口向内核注入恶意数据或触发异常逻辑。一次不安全的<code>write</code>操作，其破坏力可能远超一次应用层的崩溃。</p>
+
+<table>
+<thead><tr><th>攻击面</th><th>典型漏洞</th><th>潜在后果</th><th>内核版本影响</th></tr></thead>
+<tbody>
+<tr><td><code>ioctl</code>命令分发</td><td>命令号未验证、参数结构体未检查</td><td>任意代码执行、信息泄露</td><td>全版本</td></tr>
+<tr><td><code>read</code>/<code>write</code>/<code>mmap</code></td><td>缓冲区溢出（栈/堆）、整数溢出</td><td>内核崩溃、权限提升</td><td>全版本，缓解机制随版本增强</td></tr>
+<tr><td>中断处理例程</td><td>未屏蔽中断、重入导致状态不一致</td><td>系统死锁、数据损坏</td><td>全版本</td></tr>
+<tr><td>Proc/Sysfs接口</td><td>格式化字符串漏洞、竞态条件</td><td>内核内存泄露、系统不稳定</td><td>全版本</td></tr>
+<tr><td>自定义Netlink套接字</td><td>消息长度/类型未校验、权限检查缺失</td><td>远程或本地提权</td><td>全版本</td></tr>
+</tbody>
+</table>
+
+<p>我在一个传感器驱动项目中踩过坑：为方便调试，通过<code>sysfs</code>暴露了一个可以动态修改硬件采样率的节点。因为没有对写入值进行范围校验，用户写入一个超大的值导致硬件寄存器配置错误，直接让整个I2C总线锁死，需要重启才能恢复。</p>
+
+<h3>输入验证：第一道也是最重要的防线</h3>
+<p>把用户数据想象成来自外部的快递包裹。你不能假设里面一定是安全的礼物，必须像安检一样，检查包裹的尺寸、形状和内容，确认安全后才能拆开使用。对于驱动，这个“安检”就是输入验证。</p>
+
+<div class="key-point">
+<h4>🔍 核心原则：绝不信任用户空间数据</h4>
+<p>所有源自用户空间的数据（通过<code>copy_from_user</code>, <code>get_user</code>, <code>ioctl</code>参数等）在用于任何关键操作（如指针解引用、数组索引、大小计算）之前，都必须经过严格验证。</p>
+</div>
+
+<p>验证必须覆盖以下几个方面，我推荐你按照这个流程来思考：</p>
+
+<div class="flowchart">
+  <div class="flow-step">接收用户数据</div><span class="flow-arrow">→</span>
+  <div class="flow-step">验证命令/操作合法性</div><span class="flow-arrow">→</span>
+  <div class="flow-step">验证参数结构体大小</div><span class="flow-arrow">→</span>
+  <div class="flow-step">验证具体参数值范围</div><span class="flow-arrow">→</span>
+  <div class="flow-step">安全拷贝到内核缓冲区</div><span class="flow-arrow">→</span>
+  <div class="flow-step">执行业务逻辑</div>
+</div>
+
+<p>让我们看一个反面例子和修正后的代码。这是一个处理设置参数的<code>ioctl</code>实现片段：</p>
+
+<pre><code><span class="cmt">// 不安全的版本：完全信任用户数据</span>
+<span class="kw">static long</span> <span class="func">unsafe_ioctl</span>(<span class="kw">struct file</span> *filp, <span class="kw">unsigned int</span> cmd, <span class="kw">unsigned long</span> arg) {
+    <span class="kw">struct</span> user_config <span class="func">config</span>;
+    <span class="kw">if</span> (<span class="func">copy_from_user</span>(&config, (<span class="kw">void __user</span> *)arg, <span class="kw">sizeof</span>(config)))
+        <span class="kw">return</span> -EFAULT;
+
+    <span class="cmt">// 直接使用未经验证的数据！</span>
+    my_device-&gt;sample_rate = config.rate; <span class="cmt">// 可能导致整数溢出或非法值</span>
+    my_device-&gt;buffer_size = config.buf_size; <span class="cmt">// 可能分配巨大内存</span>
+    my_device-&gt;channel = config.channel; <span class="cmt">// 可能数组越界</span>
+    <span class="kw">return</span> <span class="num">0</span>;
+}</code></pre>
+
+<pre><code><span class="cmt">// 安全的版本：逐项验证</span>
+<span class="kw">static long</span> <span class="func">safe_ioctl</span>(<span class="kw">struct file</span> *filp, <span class="kw">unsigned int</span> cmd, <span class="kw">unsigned long</span> arg) {
+    <span class="kw">struct</span> user_config <span class="func">config</span>;
+    <span class="cmt">// 1. 验证命令本身 (假设 MY_IOCTL_SET_CONFIG 是合法命令)</span>
+    <span class="kw">if</span> (cmd != MY_IOCTL_SET_CONFIG)
+        <span class="kw">return</span> -ENOTTY;
+
+    <span class="cmt">// 2. 安全拷贝数据</span>
+    <span class="kw">if</span> (<span class="func">copy_from_user</span>(&config, (<span class="kw">void __user</span> *)arg, <span class="kw">sizeof</span>(config)))
+        <span class="kw">return</span> -EFAULT;
+
+    <span class="cmt">// 3. 验证具体参数值</span>
+    <span class="cmt">// 采样率必须在 1Hz 到 100000Hz 之间</span>
+    <span class="kw">if</span> (config.rate &lt; <span class="num">1</span> || config.rate &gt; <span class="num">100000</span>)
+        <span class="kw">return</span> -EINVAL;
+    <span class="cmt">// 缓冲区大小不能超过 1MB，且必须是页面大小的倍数</span>
+    <span class="kw">if</span> (config.buf_size == <span class="num">0</span> || config.buf_size &gt; (<span class="num">1024</span>*<span class="num">1024</span>) || (config.buf_size % PAGE_SIZE) != <span class="num">0</span>)
+        <span class="kw">return</span> -EINVAL;
+    <span class="cmt">// 通道号不能超过硬件支持的最大通道数</span>
+    <span class="kw">if</span> (config.channel &gt;= MAX_HW_CHANNELS)
+        <span class="kw">return</span> -EINVAL;
+
+    <span class="cmt">// 4. 所有验证通过后，才应用到设备状态</span>
+    my_device-&gt;sample_rate = config.rate;
+    my_device-&gt;buffer_size = config.buf_size;
+    my_device-&gt;channel = config.channel;
+    <span class="kw">return</span> <span class="num">0</span>;
+}</code></pre>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：关于<code>ioctl</code>命令号的定义与规范方法，以及<code>copy_from_user</code>等函数的详细用法和错误处理，可以参考<a href="#">第1章 字符设备驱动框架</a>中的相关章节。</p>
+</div>
+
+<h3>安全的内存管理：杜绝溢出与泄漏</h3>
+<p>内核内存错误是驱动安全的重灾区。除了验证输入，在内存操作本身也需要遵循安全模式。</p>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>栈缓冲区安全</h4><ul><li><strong>禁用可变长数组（VLA）</strong>：如<code>char buf[size];</code>，<code>size</code>若用户可控极危险。</li><li><strong>使用固定大小数组</strong>并检查拷贝长度：<code>char buf[MAX_LEN]; if (len &gt; MAX_LEN) return -EINVAL;</code></li><li><strong>优先使用内核安全API</strong>：如<code>strscpy</code>, <code>strscpy_pad</code>替代<code>strcpy</code>, <code>strncpy</code>。</li></ul></div>
+  <div class="scenario-card green"><h4>堆内存安全</h4><ul><li><strong>检查<code>kmalloc</code>分配结果</strong>：永远检查返回指针是否为<code>NULL</code>。</li><li><strong>大小计算防整数溢出</strong>：<code>if (count &gt; SIZE_MAX / elem_size) return -ENOMEM;</code></li><li><strong>配对释放</strong>：在错误路径上也必须释放已分配的资源。</li></ul></div>
+  <div class="scenario-card purple"><h4>指针与引用安全</h4><ul><li><strong>用户指针始终用<code>__user</code>标记</strong>，提醒自己不能直接解引用。</li><li><strong>使用<code>access_ok()</code>验证用户地址</strong>（尽管<code>copy_*_user</code>内部会做，显式调用更清晰）。</li><li><strong>释放后置空</strong>：<code>kfree(ptr); ptr = NULL;</code>防止重复释放（Use-After-Free）。</li></ul></div>
+</div>
+
+<p>一个经典的整数溢出导致堆缓冲区溢出的陷阱：</p>
+<pre><code><span class="cmt">// 危险：`count * elem_size` 可能溢出，导致分配过小缓冲区</span>
+<span class="kw">void</span> *<span class="func">unsafe_alloc</span>(<span class="kw">size_t</span> count, <span class="kw">size_t</span> elem_size) {
+    <span class="kw">return</span> <span class="func">kmalloc</span>(count * elem_size, GFP_KERNEL); <span class="cmt">// 可能溢出！</span>
+}
+
+<span class="cmt">// 安全：在乘法前检查是否溢出</span>
+<span class="kw">void</span> *<span class="func">safe_alloc</span>(<span class="kw">size_t</span> count, <span class="kw">size_t</span> elem_size) {
+    <span class="kw">size_t</span> total_size;
+    <span class="kw">if</span> (<span class="func">check_mul_overflow</span>(count, elem_size, &total_size)) <span class="cmt">// 内核提供的检查函数</span>
+        <span class="kw">return</span> NULL;
+    <span class="kw">return</span> <span class="func">kmalloc</span>(total_size, GFP_KERNEL);
+}</code></pre>
+
+<p>实际开发中，大部分团队会强制要求使用类似<code>safe_alloc</code>的包装函数，并将<code>check_mul_overflow</code>这类检查作为代码审查的必查项。内核从5.6版本开始，在<code>include/linux/overflow.h</code>中提供了<code>check_add_overflow</code>, <code>check_mul_overflow</code>等辅助宏，请务必使用它们。</p>
+
+<h3>利用内核内置的安全机制</h3>
+<p>现代Linux内核（特别是5.x以后）集成了多种缓解安全漏洞的机制。作为驱动开发者，你需要确保你的驱动能与之协同工作，而不是无意中绕过它们。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">驱动代码</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node secondary">编译时加固</div>
+    <span class="arch-connector">→</span>
+    <div class="arch-node accent">运行时保护</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node primary">启用栈保护<br>(-fstack-protector-strong)</div>
+    <span class="arch-connector">⇄</span>
+    <div class="arch-node accent">启用KASAN<br>(动态内存错误检测)</div>
+  </div>
+</div>
+
+<p>首先，在你的驱动Makefile中启用编译器的安全选项。这通常由内核顶层Makefile控制，但你需要了解其作用：</p>
+<ul>
+<li><strong><code>-fstack-protector-strong</code></strong>：在函数栈帧中插入“金丝雀”值，检测栈缓冲区溢出。这是现代内核的标准配置，你的驱动自动受益。</li>
+<li><strong><code>-D_FORTIFY_SOURCE=2</code></strong>：在编译时对字符串和内存操作函数（如<code>memcpy</code>, <code>strcpy</code>）进行缓冲区大小检查。需要你正确使用<code>sizeof(dst)</code>等。</li>
+</ul>
+<p>其次，在开发阶段积极使用内核的运行时检测工具：</p>
+<ul>
+<li><strong>KASAN (KernelAddressSANitizer)</strong>：类似于用户空间的ASan，能检测use-after-free、out-of-bounds访问等内存错误。开发驱动时，在开启KASAN的内核上测试是必须的步骤。它会明显拖慢性能，仅用于测试。</li>
+<li><strong>LOCKDEP</strong>：死锁检测器。如果你在驱动中使用了自旋锁、互斥锁，LOCKDEP可以帮助你发现不正确的锁获取顺序，避免潜在的死锁漏洞。</li>
+</ul>
+<p>如果你看到类似“KASAN: slab-out-of-bounds write in my_driver_write”这样的报错，大概率是你的写操作越界了1个字节，需要仔细检查循环边界或拷贝长度。</p>
+
+<div class="concept-block">
+<h4>🔐 权限与能力检查</h4>
+<p>不是所有用户都有权操作你的设备。在驱动的<code>open</code>函数或关键的<code>ioctl</code>命令开始时，应检查当前进程的权限。例如，一个配置硬件时钟的<code>ioctl</code>可能只允许root用户执行：</p>
+<pre><code><span class="kw">if</span> (!<span class="func">capable</span>(CAP_SYS_TIME)) {
+    <span class="func">pr_warn</span>(<span class="str">"Process %d attempted privileged clock operation without CAP_SYS_TIME\n"</span>, current-&gt;pid);
+    <span class="kw">return</span> -EPERM;
+}</code></pre>
+<p>使用<code>capable()</code>检查特定的能力（Capability），比简单检查<code>current_uid() == 0</code>更精细，符合最小权限原则。</p>
+</div>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1.  <strong>代码审计练习</strong>：找一个你之前写过的简单字符设备驱动（或从开源项目找一个），重点审查其<code>ioctl</code>函数和<code>write</code>函数。列出所有来自用户空间的数据输入点，并检查每一项是否都进行了：
+    <ul>
+        <li>命令号/操作合法性验证。</li>
+        <li>参数结构体大小验证（防止信息泄露）。</li>
+        <li>具体数值的范围/边界检查。</li>
+        <li>缓冲区拷贝的长度限制。</li>
+    </ul>
+</p>
+<p>2.  <strong>安全编译测试</strong>：将你的驱动模块放在一个开启了KASAN和LOCKDEP的内核源码树中重新编译并加载（你需要配置内核并开启这些调试选项）。尝试通过用户空间程序传入一些边界或异常值（如超长字符串、负数、超大的size值），观察内核日志是否有KASAN报错或警告信息。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>为什么在内核驱动中直接使用用户空间传入的整数作为数组索引是危险的？除了越界，还可能引发什么问题？</li>
+<li>假设一个<code>ioctl</code>命令需要传递一个包含指针成员的结构体，这个指针指向用户空间的一个缓冲区。请描述从接收该结构体到安全访问缓冲区数据的完整验证步骤。</li>
+<li><code>copy_from_user</code>执行成功返回0，是否意味着从用户空间拷贝过来的数据就是安全可用的？为什么？</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li><strong>内核驱动安全的核心是“零信任”</strong>：所有源自用户空间的数据都必须经过严格、多层次的验证（命令、大小、范围）后才能使用。</li>
+<li><strong>内存操作是漏洞高发区</strong>：必须防范栈/堆缓冲区溢出、整数溢出和Use-After-Free。使用内核安全API（如<code>strscpy</code>）和溢出检查宏（如<code>check_mul_overflow</code>）。</li>
+<li><strong>善用内核安全基础设施</strong>：在开发阶段利用KASAN、LOCKDEP等工具主动发现漏洞；确保驱动代码兼容栈保护等编译时加固机制。</li>
+<li><strong>实施最小权限原则</strong>：使用<code>capable()</code>在关键操作前检查进程能力，避免未授权访问。</li>
+<li><strong>安全是贯穿始终的过程</strong>：从设计、编码、测试到代码审查，每个环节都需要有安全意识的参与，才能构建出健壮的驱动。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="36.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="38.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第37章 —</div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第18章 IIO工业IO子系统</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第18章 IIO工业IO子系统</h2></div>
+
+<div class="chapter-guide">
+    <div class="guide-meta">
+      <span class="guide-meta-item"><span class="difficulty-tag diff-intermediate">进阶</span></span>
+      <span class="guide-meta-item"><span class="meta-icon">👤</span> 熟悉字符设备与设备树的驱动工程师</span>
+      <span class="guide-meta-item"><span class="meta-icon">🔧</span> 开发ADC、陀螺仪、光感等传感器驱动</span>
+    </div>
+    <div class="guide-body">
+      <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>IIO子系统的核心框架与数据流</li><li>使用IIO框架编写一个ADC传感器驱动</li><li>通过sysfs和字符设备两种方式读取传感器数据</li></ul></div>
+      <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">IIO设备</span><span class="guide-concept-tag">通道(Channel)</span></div>
+    </div>
+</div>
+
+<p>凌晨三点，产线告警：一个基于STM32MP157的工控板，其用于监测电压的ADC读数突然全部归零。你检查硬件，供电正常；用示波器看模拟信号，波形完好。最终定位到驱动：工程师直接操作寄存器读取ADC，但在一次内核升级后，寄存器映射地址变了。如果当初使用了IIO框架，这个驱动将与具体硬件寄存器解耦，根本不会出这个问题。</p>
+<p>IIO（Industrial I/O）子系统是Linux内核为各类模拟/数字传感器（ADC、DAC、陀螺仪、加速度计、光传感器等）建立的标准驱动框架。它统一了数据访问接口（sysfs和字符设备），并提供了丰富的内置缓冲区和事件处理机制，让驱动开发者能专注于硬件交互，而不是重复造轮子。</p>
+
+<div class="concept-block">
+<h4>生活类比：超市的标准化货架</h4>
+<p>想象一个超市，每种商品（传感器数据）都被放在标准尺寸的货架（IIO通道）上，并贴上统一的条形码（属性名称）。顾客（用户程序）无论想买酱油还是食盐，都通过同样的扫码枪（sysfs接口或read系统调用）来获取信息，而不需要知道货物是如何从仓库搬出来的。IIO就是这个“标准化货架系统”，它定义了传感器数据如何被命名、组织和访问。</p>
+<p><strong>技术定义</strong>：IIO是一个内核子系统，它通过<code>struct iio_dev</code>抽象一个传感器设备，用<code>struct iio_chan_spec</code>定义数据通道，并在<code>/sys/bus/iio/devices/</code>下导出统一的属性文件，或在<code>/dev/iio:deviceX</code>提供字符设备接口进行数据读写。</p>
+</div>
+
+<h3>IIO子系统架构全景</h3>
+<p>理解IIO，首先要看清它的全貌。与直接编写一个混杂（misc）设备驱动相比，IIO框架将驱动分层，每层各司其职。我在一个气压计驱动项目中，就是因为没理清这几层关系，把硬件触发逻辑写在了不该写的地方，导致系统延迟极高。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">用户空间</div>
+    <span class="arch-connector">↓ (sysfs/字符设备)</span>
+  </div>
+  <div class="arch-row">
+    <div class="arch-node secondary">IIO核心层</div>
+    <span class="arch-connector">⇄</span>
+    <div class="arch-node secondary">IIO缓冲区</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓ (ops回调)</span></div>
+  <div class="arch-row">
+    <div class="arch-node accent">IIO驱动层</div>
+    <span class="arch-connector">↓ (I2C/SPI/寄存器)</span>
+  </div>
+  <div class="arch-row">
+    <div class="arch-node accent">物理硬件</div>
+    <span class="arch-connector">(ADC, Sensor)</span>
+  </div>
+</div>
+
+<p><strong>IIO核心层</strong>：提供框架基石，管理设备的注册/注销，处理sysfs属性文件的创建与访问，维护缓冲区逻辑。你几乎不需要修改这部分代码。</p>
+<p><strong>IIO驱动层</strong>：这是你工作的主战场。你需要实现一个<code>struct iio_info</code>结构体，填充其中的回调函数（如<code>read_raw</code>），告诉核心层“如何读取数据”。同时，要定义设备具备哪些通道。</p>
+<p><strong>IIO缓冲区</strong>：一个可选但强大的组件，用于支持硬件触发和连续数据采集。当数据速率很高（如高速ADC）时，必须启用缓冲区。</p>
+
+<h3>核心数据结构与驱动编写步骤</h3>
+<p>编写一个IIO驱动，本质上是填充几个关键结构体并向内核注册。我们以一个假设的4通道ADC芯片“VREF-ADC100”（12位精度，I2C接口）为例。</p>
+
+<div class="key-point">
+<h4>第一步：定义通道（Channels）</h4>
+<p>通道是IIO中最重要的概念，它定义了传感器能测量什么。每个通道有类型（电压、温度、光强等）、索引、方向等信息。我们的ADC有4个单端电压输入通道。</p>
+<pre><code><span class="cmt">// 定义ADC的4个电压输入通道</span>
+<span class="kw">static const struct</span> iio_chan_spec adc100_channels[] = {
+    {
+        .type = IIO_VOLTAGE, <span class="cmt">// 通道类型：电压</span>
+        .indexed = 1,
+        .channel = 0,        <span class="cmt">// 通道0</span>
+        .info_mask_separate = BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
+        .address = 0x00,     <span class="cmt">// 芯片内该通道的寄存器地址</span>
+    },
+    {
+        .type = IIO_VOLTAGE,
+        .indexed = 1,
+        .channel = 1,        <span class="cmt">// 通道1</span>
+        .info_mask_separate = BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
+        .address = 0x01,
+    },
+    <span class="cmt">// ... 通道2和通道3</span>
+};</code></pre>
+<p><code>info_mask_separate</code>指明了这个通道通过sysfs暴露哪些属性。这里<code>BIT(IIO_CHAN_INFO_RAW)</code>会生成<code>in_voltage0_raw</code>文件，<code>BIT(IIO_CHAN_INFO_SCALE)</code>会生成<code>in_voltage0_scale</code>文件。</p>
+</div>
+
+<div class="key-point">
+<h4>第二步：实现iio_info回调函数</h4>
+<p>这是驱动与硬件对话的地方。<code>read_raw</code>是最常用的回调，当用户读取<code>in_voltageX_raw</code>文件时，内核最终会调用它。</p>
+<pre><code><span class="kw">static int</span> <span class="func">adc100_read_raw</span>(<span class="kw">struct</span> iio_dev *indio_dev,
+                          <span class="kw">struct</span> iio_chan_spec <span class="kw">const</span> *chan,
+                          <span class="kw">int</span> *val, <span class="kw">int</span> *val2, <span class="kw">long</span> mask)
+{
+    <span class="kw">struct</span> adc100_data *data = iio_priv(indio_dev);
+    <span class="kw">int</span> ret;
+
+    <span class="kw">switch</span> (mask) {
+    <span class="kw">case</span> IIO_CHAN_INFO_RAW: <span class="cmt">// 处理读取原始值的请求</span>
+        <span class="cmt">// 通过I2C读取硬件寄存器，地址为chan->address</span>
+        ret = i2c_smbus_read_word_data(data->client, chan->address);
+        <span class="kw">if</span> (ret < <span class="num">0</span>)
+            <span class="kw">return</span> ret;
+        *val = ret & <span class="num">0x0FFF</span>; <span class="cmt">// 我们的ADC是12位</span>
+        <span class="kw">return</span> IIO_VAL_INT;
+    <span class="kw">case</span> IIO_CHAN_INFO_SCALE: <span class="cmt">// 处理读取比例因子的请求</span>
+        <span class="cmt">// 假设参考电压为3.3V，12位ADC，scale = 3300mV / 4096 LSB</span>
+        *val = <span class="num">0</span>;
+        *val2 = <span class="num">805664</span>; <span class="cmt">// 单位是微伏 (3.3V/4096 ≈ 0.805664mV)</span>
+        <span class="kw">return</span> IIO_VAL_INT_PLUS_MICRO;
+    <span class="kw">default</span>:
+        <span class="kw">return</span> -EINVAL;
+    }
+}
+
+<span class="kw">static const struct</span> iio_info adc100_info = {
+    .read_raw = adc100_read_raw,
+};</code></pre>
+</div>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区</h4>
+<ul>
+<li><strong>混淆val和val2的返回值类型</strong>：这是新手最易踩的坑。<code>IIO_VAL_INT</code>表示*val是有效值；<code>IIO_VAL_INT_PLUS_MICRO</code>表示*val是整数部分，*val2是微（10^-6）部分。如果比例因子是1.5，应设置*val=1，*val2=500000，返回<code>IIO_VAL_INT_PLUS_MICRO</code>。</li>
+<li><strong>忘记处理字节序</strong>：通过I2C/SPI读取的多字节数据，要注意芯片的字节序（Endianness）。我曾调试一个温度传感器，读数总是错乱，最后发现是芯片返回的数据是低字节在前，而驱动按高字节在前解析了。</li>
+<li><strong>在read_raw中睡眠或长时间占用锁</strong>：这个函数可能在中断上下文或持有锁的情况下被调用，必须保持高效，不能调用可能引起睡眠的函数（如<code>msleep</code>）。对于慢速传感器，应使用缓冲区+触发模式。</li>
+</ul>
+</div>
+
+<h3>数据访问：Sysfs vs 字符设备</h3>
+<p>IIO为用户空间提供了两种数据访问方式，适用于不同场景。</p>
+
+<div class="scenario-grid">
+    <div class="scenario-card blue"><h4>Sysfs属性文件</h4><ul><li><strong>场景</strong>：配置、调试、低频数据读取。</li><li><strong>用法</strong>：直接cat或echo到<code>/sys/bus/iio/devices/iio:deviceX/</code>下的文件。</li><li><strong>示例</strong>：<code>cat /sys/bus/iio/devices/iio:device0/in_voltage0_raw</code> 读取原始值。</li></ul></div>
+    <div class="scenario-card green"><h4>字符设备 (/dev/iio:deviceX)</h4><ul><li><strong>场景</strong>：高速、连续数据采集。</li><li><strong>用法</strong>：使用<code>read()</code>、<code>ioctl()</code>系统调用，配合<code>libiio</code>库。</li><li><strong>优势</strong>：支持阻塞/非阻塞IO、缓冲区、硬件触发。</li></ul></div>
+</div>
+
+<p>对于大多数简单应用，Sysfs足够用。但如果你需要以100Hz以上的频率采集数据，或者希望由硬件事件（如GPIO中断）来触发采样，就必须启用IIO缓冲区并走字符设备接口。实际开发中，我建议先实现Sysfs接口，验证驱动基础功能，再根据需要添加缓冲区支持。</p>
+
+<div class="editor-note">
+<p><strong>编者提示</strong>：IIO驱动底层通常依赖I2C或SPI总线与硬件通信。关于如何编写I2C/SPI客户端驱动、如何解析设备树节点获取配置，请回顾本教程的<a href="#">第9章 I2C总线驱动开发</a>和<a href="#">第10章 SPI总线驱动开发</a>。</p>
+</div>
+
+<h3>实战：一个IIO驱动的完整流程</h3>
+<p>让我们把上面的代码片段串联起来，看看一个IIO驱动从初始化到被用户读取的完整生命周期。以下流程图忽略了错误处理以保持清晰。</p>
+
+<div class="flowchart">
+  <div class="flow-step">驱动probe函数</div><span class="flow-arrow">→</span>
+  <div class="flow-step">1. 分配iio_dev (iio_device_alloc)</div><span class="flow-arrow">→</span>
+  <div class="flow-step">2. 设置通道、模式、info等</div><span class="flow-arrow">→</span>
+  <div class="flow-step">3. 注册设备 (iio_device_register)</div><span class="flow-arrow">↓</span>
+  <div class="flow-step">用户cat in_voltage0_raw</div><span class="flow-arrow">→</span>
+  <div class="flow-step">IIO核心调用驱动read_raw回调</div><span class="flow-arrow">→</span>
+  <div class="flow-step">驱动通过I2C读取硬件</div><span class="flow-arrow">→</span>
+  <div class="flow-step">返回数据给用户</div>
+</div>
+
+<p>关键步骤的代码骨架如下：</p>
+<pre><code><span class="kw">static int</span> <span class="func">adc100_probe</span>(<span class="kw">struct</span> i2c_client *client)
+{
+    <span class="kw">struct</span> iio_dev *indio_dev;
+    <span class="kw">struct</span> adc100_data *data;
+
+    <span class="cmt">// 1. 分配IIO设备结构，并分配私有数据结构空间</span>
+    indio_dev = iio_device_alloc(<span class="kw">sizeof</span>(*data));
+    <span class="cmt">// 2. 关联i2c_client，初始化私有数据（如校准参数）</span>
+    data = iio_priv(indio_dev);
+    data->client = client;
+
+    <span class="cmt">// 3. 设置IIO设备基本信息</span>
+    indio_dev->name = <span class="str">"adc100"</span>;
+    indio_dev->info = &adc100_info; <span class="cmt">// 前面定义的info结构体</span>
+    indio_dev->channels = adc100_channels;
+    indio_dev->num_channels = ARRAY_SIZE(adc100_channels);
+    indio_dev->modes = INDIO_DIRECT_MODE; <span class="cmt">// 直接模式，支持sysfs读取</span>
+
+    <span class="cmt">// 4. 向IIO子系统注册设备</span>
+    <span class="kw">return</span> iio_device_register(indio_dev);
+}</code></pre>
+
+<p>注册成功后，你会在<code>/sys/bus/iio/devices/</code>下看到<code>iio:deviceX</code>目录，里面包含了定义的所有通道属性文件。</p>
+
+<h3>IIO设备与通道类型速查表</h3>
+<p>IIO预定义了大量的设备类型和通道类型，正确使用它们能让你的驱动自动集成到更上层的应用（如传感器服务）中。下表列举了最常见的几种：</p>
+
+<table>
+<thead><tr><th>设备/通道类型 (IIO_*)</th><th>含义</th><th>典型Sysfs属性示例</th><th>适用传感器</th></tr></thead>
+<tbody>
+<tr><td><code>VOLTAGE</code></td><td>电压</td><td><code>in_voltageX_raw</code>, <code>in_voltageX_scale</code></td><td>ADC芯片、电源监测IC</td></tr>
+<tr><td><code>CURRENT</code></td><td>电流</td><td><code>in_currentX_raw</code></td><td>电流传感器</td></tr>
+<tr><td><code>TEMP</code></td><td>温度</td><td><code>in_temp_raw</code>, <code>in_temp_offset</code></td><td>温度传感器（如LM75）</td></tr>
+<tr><td><code>ACCEL</code></td><td>加速度</td><td><code>in_accel_x_raw</code></td><td>加速度计（如MPU6050）</td></tr>
+<tr><td><code>GYRO</code></td><td>角速度</td><td><code>in_anglvel_x_raw</code></td><td>陀螺仪</td></tr>
+<tr><td><code>LIGHT</code></td><td>环境光</td><td><code>in_illuminance_raw</code></td><td>光强度传感器</td></tr>
+<tr><td><code>PROXIMITY</code></td><td>接近感应</td><td><code>in_proximity_raw</code></td><td>接近传感器</td></tr>
+</tbody>
+</table>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>你手头有一个模拟的I2C ADC设备，其从机地址为0x48。每个通道的读数位于寄存器地址0x00(通道0)到0x03(通道3)。参考电压为内部2.5V，分辨率为10位。</p>
+<ol>
+<li>基于本章的代码框架，编写这个ADC的IIO驱动。在<code>read_raw</code>函数中实现原始值读取（注意10位数据可能位于读取结果的某几位）。</li>
+<li>编译并加载驱动模块。使用<code>i2c-tools</code>中的<code>i2cdetect</code>命令确认设备被识别。</li>
+<li>在<code>/sys/bus/iio/devices/</code>下找到你的设备，尝试用<code>cat</code>命令读取四个电压通道的原始值。</li>
+<li>（进阶）计算并实现正确的<code>scale</code>属性，使得用户读取<code>in_voltageX_scale</code>能得到以微伏为单位的比例因子。</li>
+</ol>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>IIO驱动中的<code>struct iio_chan_spec</code>结构体主要用来描述什么？<code>info_mask_separate</code>字段的作用是什么？</li>
+<li>当用户空间程序执行<code>cat /sys/bus/iio/devices/iio:device0/in_voltage0_raw</code>时，内核中依次发生了哪些函数调用？（从VFS到你的驱动）</li>
+<li>在<code>read_raw</code>回调函数中，参数<code>mask</code>的值为<code>IIO_CHAN_INFO_SCALE</code>，你应该如何设置<code>val</code>和<code>val2</code>来表示一个3.3V的参考电压和12位的ADC分辨率？返回值应该是什么？</li>
+<li>什么情况下你应该考虑为IIO驱动启用缓冲区（Buffer）支持？</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li>IIO子系统是Linux内核为传感器类设备提供的标准化框架，通过统一接口（sysfs/字符设备）简化了驱动开发和应用访问。</li>
+<li>编写IIO驱动的核心是定义<code>iio_chan_spec</code>通道数组并实现<code>iio_info</code>中的回调函数（特别是<code>read_raw</code>），将硬件操作封装在其中。</li>
+<li>数据访问有两种模式：Sysfs适用于低频配置和读取；字符设备配合缓冲区适用于高速、连续或硬件触发的数据采集。</li>
+<li>必须正确理解并返回<code>IIO_VAL_*</code>系列常量，这是驱动能正确提供数据的关键，也是新手最容易出错的地方。</li>
+<li>在实际项目中，应优先使用IIO框架而非从头编写字符设备驱动，以获得更好的可维护性、可移植性和内核社区支持。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="17.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="19.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第18章 —</div>
+    </div>
+</body>
+</html>

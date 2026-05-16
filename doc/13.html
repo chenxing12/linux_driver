@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内核驱动开发实战120例 - 第13章 块设备驱动开发</title>
+    <style>
+@import url('https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --primary: #4db8a4;
+    --primary-dark: #3a9e8c;
+    --primary-light: #6fcfbe;
+    --accent: #45a899;
+    --accent-light: #a8e6db;
+    --gradient-main: linear-gradient(135deg, #4db8a4, #5ec6b4);
+    --gradient-soft: linear-gradient(135deg, #4db8a4 0%, #5ec6b4 50%, #7dd4c6 100%);
+    --gradient-header: linear-gradient(135deg, #4db8a4, #62c9b8, #7dd4c6);
+    --gradient-header-dark: linear-gradient(135deg, #2a7d6e, #358f7f, #4db8a4);
+    --bg-page: #f6f8fa;
+    --bg-white: #ffffff;
+    --bg-gray-50: #f8f9fb;
+    --bg-gray-100: #f0f2f5;
+    --bg-green-50: #edf9f5;
+    --bg-teal-50: #f0faf7;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-light: #e5e7eb;
+    --border-default: #d1d5db;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-card-hover: 0 4px 12px rgba(77,184,164,0.12), 0 2px 4px rgba(0,0,0,0.04);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", 'Segoe UI', sans-serif;
+    line-height: 1.8;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ━━━ 目录页 ━━━ */
+.catalog-container { max-width: 900px; margin: 0 auto; padding: 0 24px 30px; }
+
+.catalog-hero {
+    text-align: center; padding: 30px 30px 22px;
+    background: var(--gradient-header);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.catalog-hero::before {
+    content: ''; position: absolute; top: -50%; right: -15%;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: -8%;
+    width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.catalog-hero h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 1px; margin-bottom: 8px; position: relative; z-index: 1; }
+.catalog-hero .subtitle { color: rgba(255,255,255,0.85); font-size: 18px; font-weight: 500; letter-spacing: 2px; position: relative; z-index: 1; }
+
+/* 统计数据条 */
+.stats-bar {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 14px 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    margin-bottom: 16px; box-shadow: var(--shadow-card);
+}
+.stats-item { text-align: center; }
+.stats-number { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stats-label { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+/* 4列网格 */
+.catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+.catalog-card-link { text-decoration: none; color: inherit; display: block; }
+.catalog-card-link:visited { color: inherit; }
+
+.catalog-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 14px 14px 10px;
+    transition: all 0.2s ease; box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column; height: 100%;
+}
+.catalog-card:hover {
+    border-color: rgba(77,184,164,0.35);
+    box-shadow: var(--shadow-card-hover); transform: translateY(-2px);
+}
+
+.card-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #fef0ef; color: #e8564a;
+    font-size: 12px; font-weight: 700; margin-bottom: 6px; flex-shrink: 0;
+}
+.card-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; line-height: 1.35; min-height: 38px; }
+.card-points { list-style: none; padding: 0; margin: 0 0 6px 0; flex-grow: 1; }
+.card-points li { font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 1px 0 1px 14px; position: relative; }
+.card-points li::before { content: '▸'; position: absolute; left: 0; color: var(--primary); font-size: 12px; font-weight: 700; }
+.card-action {
+    display: inline-block; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--primary); padding: 4px 14px; border-radius: 4px;
+    margin-top: 6px; transition: background 0.2s; text-align: center;
+}
+.catalog-card:hover .card-action { background: var(--primary-dark); }
+
+/* ━━━ 章节内容页 ━━━ */
+.chapter-container { max-width: 880px; margin: 0 auto; padding: 48px 40px; background: var(--bg-white); }
+
+.chapter-header {
+    background: var(--gradient-header); border-radius: var(--radius-lg);
+    padding: 28px 32px; margin-bottom: 32px; position: relative; overflow: hidden;
+}
+.chapter-header::before {
+    content: ''; position: absolute; top: -60%; right: -15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+.chapter-header h2 { color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; position: relative; z-index: 1; }
+
+/* ── 导读卡片 ── */
+.chapter-guide {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 28px; box-shadow: var(--shadow-card);
+}
+.guide-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    background: var(--bg-gray-50); border-bottom: 1px solid var(--border-light); padding: 0;
+}
+.guide-meta-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; font-size: 13px; color: var(--text-secondary);
+    border-right: 1px solid var(--border-light); white-space: nowrap; line-height: 1;
+}
+.guide-meta-item:last-child { border-right: none; }
+.guide-meta-item .meta-icon { font-size: 14px; flex-shrink: 0; }
+.guide-body { padding: 18px 24px 20px; }
+.guide-learn { margin-bottom: 14px; }
+.guide-learn-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-bottom: 8px; display: block;
+}
+.guide-learn-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-learn ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.guide-learn li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; padding-left: 16px; position: relative; }
+.guide-learn li::before { content: '▸'; position: absolute; left: 0; color: var(--accent-light); font-weight: 700; font-size: 14px; }
+.guide-concepts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.guide-concepts-label {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1.5px; margin-right: 4px;
+}
+.guide-concepts-label::before {
+    content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--primary); margin-right: 8px; vertical-align: middle;
+}
+.guide-concept-tag {
+    display: inline-block; background: var(--bg-green-50);
+    border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 14px;
+    font-size: 13px; font-weight: 500;
+}
+
+.chapter-content { padding: 0; }
+.chapter-content h3 {
+    color: var(--text-primary); font-size: 17px; font-weight: 700;
+    margin: 32px 0 14px 0; padding: 10px 16px;
+    background: var(--bg-green-50); border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.chapter-content h4 {
+    color: var(--text-primary); font-size: 15px; font-weight: 600;
+    margin: 22px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+}
+.chapter-content p { color: var(--text-secondary); line-height: 1.85; margin-bottom: 14px; text-align: justify; }
+.chapter-content ul, .chapter-content ol { margin: 12px 0 16px 0; padding-left: 22px; color: var(--text-secondary); }
+.chapter-content li { margin-bottom: 6px; line-height: 1.7; padding-left: 4px; }
+.chapter-content li::marker { color: var(--primary); font-weight: 600; }
+
+/* ── 核心概念 / 重点知识 ── */
+.concept-block {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.concept-block h4 { color: var(--primary-dark); border-bottom: none; margin-top: 0; padding-bottom: 4px; }
+.key-point {
+    background: var(--bg-teal-50); border: 1px solid rgba(69,168,153,0.15);
+    border-radius: var(--radius-md); padding: 18px 22px; margin: 18px 0;
+}
+.key-point h4 { color: var(--accent); border-bottom: none; margin-top: 0; }
+
+/* ── 提示框 ── */
+.tip-box {
+    background: var(--bg-gray-50); border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 14px 18px; margin: 18px 0;
+}
+.tip-box::before {
+    content: 'TIP'; display: inline-block; font-weight: 700; color: var(--primary);
+    font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;
+    padding: 1px 7px; background: var(--bg-green-50); border-radius: 3px;
+}
+.tip-box.warning { border-left-color: #f59e0b; background: #fffbeb; }
+.tip-box.warning::before { content: 'CAUTION'; color: #d97706; background: #fef3c7; }
+.tip-box.important { border-left-color: #ef4444; background: #fef2f2; }
+.tip-box.important::before { content: 'IMPORTANT'; color: #dc2626; background: #fee2e2; }
+
+/* ── 代码块 + 语法高亮 ── */
+pre {
+    background: #1a2332; border-radius: var(--radius-md); margin: 18px 0;
+    overflow: hidden; border: 1px solid #243447;
+}
+pre .code-header {
+    background: #243447; padding: 7px 14px; font-size: 12px; color: #8ba4b8;
+    font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #2d4052;
+}
+pre code {
+    display: block; padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px; line-height: 1.6; color: #e2e8f0; overflow-x: auto;
+}
+pre code .kw { color: #c792ea; }
+pre code .str { color: #c3e88d; }
+pre code .cmt { color: #546e7a; font-style: italic; }
+pre code .num { color: #f78c6c; }
+pre code .func { color: #82aaff; }
+
+/* ── 表格 ── */
+table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 20px 0; border-radius: var(--radius-md); overflow: hidden;
+    border: 1px solid var(--border-light); font-size: 14px;
+}
+thead th {
+    background: var(--gradient-header); color: #fff; font-weight: 600;
+    padding: 11px 16px; text-align: left; font-size: 13px;
+}
+tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); line-height: 1.5; }
+tbody tr:nth-child(odd) { background: var(--bg-white); }
+tbody tr:nth-child(even) { background: var(--bg-gray-50); }
+tbody tr:hover { background: var(--bg-green-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── 小结框 ── */
+.summary-box {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 22px 26px; margin-top: 36px;
+    position: relative; box-shadow: var(--shadow-sm);
+}
+.summary-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--gradient-soft); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.summary-box h3 { color: var(--primary-dark) !important; border-left: none !important; background: none !important; padding: 0 !important; margin: 0 0 12px 0 !important; font-size: 15px !important; }
+.summary-box ul { list-style: none; padding-left: 0; margin-left: 0; }
+.summary-box li { padding-left: 20px; position: relative; color: var(--text-secondary); margin-bottom: 6px; }
+.summary-box li::before { content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+/* ── 流程图 ── */
+.flowchart {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0;
+    margin: 20px 0; padding: 24px 20px; background: var(--bg-white);
+    border-radius: var(--radius-md); border: 1px solid var(--border-light);
+}
+.flow-step {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    border-radius: var(--radius-sm); padding: 8px 16px; color: var(--primary-dark);
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap;
+}
+.flow-arrow { color: var(--primary-light); font-size: 18px; margin: 0 5px; flex-shrink: 0; }
+
+/* ── 时间线 ── */
+.timeline { position: relative; padding: 10px 0 10px 34px; margin: 20px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 9px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 1px;
+}
+.timeline-item {
+    position: relative; margin-bottom: 14px; padding: 12px 16px;
+    background: var(--bg-white); border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+}
+.timeline-item::before {
+    content: ''; position: absolute; left: -29px; top: 16px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary); border: 2px solid var(--bg-page); z-index: 1;
+}
+.timeline-item .step-title { color: var(--primary-dark); font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+.timeline-item p { font-size: 13px; color: var(--text-muted); margin-bottom: 0; }
+
+/* ── 对比区块 ── */
+.compare-block { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.compare-item { background: var(--bg-white); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px 18px; }
+.compare-item.pros { border-top: 3px solid var(--primary); }
+.compare-item.cons { border-top: 3px solid #f59e0b; }
+.compare-item h4 { margin-top: 0; padding-bottom: 5px; border-bottom: none; font-size: 14px; }
+
+/* ── 架构图（分层/分支结构） ── */
+.arch-diagram {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 20px; background: var(--bg-white);
+    border: 1px solid var(--border-light); border-radius: var(--radius-md); margin: 20px 0;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.arch-node {
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; line-height: 1.4;
+}
+.arch-node.primary { background: var(--bg-green-50); border: 2px solid var(--primary); color: var(--primary-dark); }
+.arch-node.secondary { background: #fff7ed; border: 2px solid #f59e0b; color: #b45309; }
+.arch-node.accent { background: #eff6ff; border: 2px solid #3b82f6; color: #1e40af; }
+.arch-connector { color: var(--text-muted); font-size: 20px; font-weight: 700; flex-shrink: 0; }
+
+/* ── 多场景卡片 ── */
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+.scenario-card { padding: 16px 18px; border-radius: var(--radius-md); border-left: 4px solid; }
+.scenario-card h4 { margin-top: 0; font-size: 14px; padding-bottom: 4px; border-bottom: none; }
+.scenario-card ul { margin: 6px 0 0 0; padding-left: 16px; }
+.scenario-card li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5; }
+.scenario-card.blue { border-color: #3b82f6; background: #eff6ff; }
+.scenario-card.blue h4 { color: #1e40af; }
+.scenario-card.green { border-color: var(--primary); background: var(--bg-green-50); }
+.scenario-card.green h4 { color: var(--primary-dark); }
+.scenario-card.purple { border-color: #8b5cf6; background: #f5f3ff; }
+.scenario-card.purple h4 { color: #6d28d9; }
+.scenario-card.orange { border-color: #f59e0b; background: #fffbeb; }
+.scenario-card.orange h4 { color: #b45309; }
+
+/* ━━━ 面试题卡片 ━━━ */
+.question-card {
+    background: var(--bg-white); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.question-card:hover { box-shadow: var(--shadow-card-hover); }
+.question-header {
+    background: var(--gradient-header-dark); padding: 14px 22px;
+    font-size: 15px; font-weight: 600; color: #fff;
+}
+.question-section { padding: 14px 22px; border-bottom: 1px solid var(--border-light); }
+.question-section:last-child { border-bottom: none; }
+.question-section h4 {
+    color: var(--primary-dark); font-size: 12px; font-weight: 700;
+    margin-bottom: 6px; margin-top: 0; padding-bottom: 0; border-bottom: none;
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.question-section p { margin-bottom: 6px; font-size: 14px; }
+.question-section.answer-section { background: var(--bg-gray-50); }
+.question-section.followup-section { background: var(--bg-green-50); }
+.keyword-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.keyword-tags .tag {
+    background: var(--bg-green-50); border: 1px solid rgba(77,184,164,0.2);
+    color: var(--primary-dark); padding: 3px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 500;
+}
+
+/* ── 面试评分标准 ── */
+.scoring-rubric {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    overflow: hidden; margin: 12px 22px 14px 22px;
+}
+.score-level {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid var(--border-light); font-size: 13px;
+}
+.score-level:last-child { border-bottom: none; }
+.score-level p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.score-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+}
+.score-excellent { background: #f0fdf4; }
+.score-excellent .score-badge { background: #dcfce7; color: #15803d; }
+.score-pass { background: #fefce8; }
+.score-pass .score-badge { background: #fef3c7; color: #b45309; }
+.score-fail { background: #fef2f2; }
+.score-fail .score-badge { background: #fee2e2; color: #dc2626; }
+
+/* ── 30秒速答（面试类） ── */
+.question-section.quick-answer {
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border-bottom: 1px solid rgba(77,184,164,0.2);
+}
+.question-section.quick-answer h4 { color: #059669; font-size: 12px; }
+.question-section.quick-answer h4::before { content: '\26A1 '; }
+.question-section.quick-answer p { color: #065f46; font-weight: 500; font-size: 15px; line-height: 1.7; }
+
+/* ── 动手试一试 ── */
+.practice-box {
+    background: linear-gradient(135deg, var(--bg-teal-50) 0%, var(--bg-green-50) 100%);
+    border: 1px solid rgba(77,184,164,0.25);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.practice-box::before {
+    content: '\1F527  动手试一试'; display: block; font-weight: 700;
+    color: var(--primary-dark); font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(77,184,164,0.25);
+}
+.practice-box h4 { display: none; }
+.practice-box ol, .practice-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.practice-box li { color: var(--text-secondary); margin-bottom: 6px; line-height: 1.7; }
+.practice-box p { color: var(--text-secondary); margin-bottom: 8px; }
+.practice-box code {
+    background: rgba(77,184,164,0.1); padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--primary-dark);
+}
+
+/* ── 检验你的理解 ── */
+.self-check {
+    background: #fefce8; border: 1px solid rgba(245,158,11,0.2);
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 20px 22px; margin: 24px 0;
+}
+.self-check::before {
+    content: '\2753  检验你的理解'; display: block; font-weight: 700;
+    color: #b45309; font-size: 15px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(245,158,11,0.3);
+}
+.self-check h4 { display: none; }
+.self-check ol { margin: 8px 0 0 0; padding-left: 20px; counter-reset: check-counter; list-style: none; }
+.self-check ol li { counter-increment: check-counter; position: relative; padding-left: 8px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.self-check ol li::before { content: 'Q' counter(check-counter); position: absolute; left: -20px; color: #d97706; font-weight: 700; font-size: 13px; }
+.self-check p { color: var(--text-secondary); margin-bottom: 6px; }
+.self-check .check-answer { color: var(--text-muted); font-size: 13px; font-style: italic; margin-top: 4px; }
+
+/* ── 编者提示 ── */
+.editor-note {
+    background: linear-gradient(135deg, #eff6ff, #f0f7ff);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 14px; color: #1e40af; line-height: 1.7;
+}
+.editor-note::before {
+    content: '\1f4d6  编者提示'; display: inline-block; font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; margin-right: 8px;
+    padding: 1px 7px; background: rgba(59,130,246,0.1); border-radius: 3px; color: #2563eb;
+}
+
+/* ── 难度标签 ── */
+.difficulty-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.diff-beginner { background: #dcfce7; color: #15803d; }
+.diff-intermediate { background: #fef3c7; color: #b45309; }
+.diff-advanced { background: #fee2e2; color: #dc2626; }
+
+/* ━━━ 章节导航栏 ━━━ */
+.chapter-nav {
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    margin-top: 40px; padding: 0 20px;
+}
+.chapter-nav a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border-radius: var(--radius-md);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: all 0.2s ease; cursor: pointer;
+}
+.chapter-nav .nav-prev,
+.chapter-nav .nav-next {
+    background: var(--bg-white); color: var(--primary);
+    border: 1px solid rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-prev:hover,
+.chapter-nav .nav-next:hover {
+    background: var(--bg-green-50); border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(77,184,164,0.12);
+}
+.chapter-nav .nav-catalog {
+    background: var(--gradient-main); color: #fff; border: none;
+}
+.chapter-nav .nav-catalog:hover {
+    opacity: 0.9; box-shadow: 0 2px 8px rgba(77,184,164,0.25);
+}
+.chapter-nav .nav-placeholder {
+    width: 120px;
+}
+
+/* ━━━ 页脚 ━━━ */
+.page-footer {
+    text-align: center; padding: 28px 0 16px 0; color: var(--text-muted);
+    font-size: 12px; letter-spacing: 1px;
+    border-top: 1px solid var(--border-light); margin-top: 24px;
+}
+</style>
+</head>
+<body>
+    <div class="chapter-container">
+        <div class="chapter-content">
+<div class="chapter-header"><h2>第13章 块设备驱动开发</h2></div>
+
+<div class="chapter-guide">
+  <div class="guide-meta">
+    <span class="guide-meta-item"><span class="difficulty-tag diff-beginner">入门</span></span>
+    <span class="guide-meta-item"><span class="meta-icon">👤</span> 已掌握字符设备驱动，想了解磁盘、U盘等存储设备驱动原理的开发者</span>
+    <span class="guide-meta-item"><span class="meta-icon">🔧</span> 为嵌入式系统开发虚拟磁盘、RAMDISK或定制化存储控制器驱动</span>
+  </div>
+  <div class="guide-body">
+    <div class="guide-learn"><div class="guide-learn-label">本章你将学到</div><ul><li>块设备驱动与字符设备的本质区别</li><li>如何注册一个块设备并实现核心请求处理函数</li><li>使用请求队列（Request Queue）管理读写操作</li></ul></div>
+    <div class="guide-concepts"><span class="guide-concepts-label">核心概念</span><span class="guide-concept-tag">块设备</span><span class="guide-concept-tag">请求队列</span></div>
+  </div>
+</div>
+
+<p>想象一下图书馆，字符设备像是一本只能一页一页顺序阅读的小说，而块设备则像一个可以随意跳转到任何一页的百科全书。在Linux内核中，<strong>块设备</strong>是指以固定大小的“块”（通常是512字节或4KB）为单位进行随机访问的存储设备，比如硬盘、SSD、U盘。与字符设备驱动的<code>read</code>/<code>write</code>直接对应系统调用不同，块设备驱动的核心是高效地处理来自文件系统的批量I/O请求。</p>
+
+<div class="concept-block">
+<h4>块设备 vs. 字符设备</h4>
+<p>理解两者的区别是块设备驱动的入门钥匙。字符设备（如键盘、串口）是面向字节流的，读写通常是顺序的。块设备则面向数据块，支持随机访问，并且内核为其提供了复杂的缓存（Page Cache）和I/O调度机制来提升性能。你在项目中如果混淆了两者的注册接口，驱动根本无法正常工作。</p>
+</div>
+
+<h3>块设备驱动的核心数据结构</h3>
+<p>开发一个最简单的块设备驱动，你需要和三个关键数据结构打交道：<code>struct gendisk</code>（通用磁盘）、<code>struct request_queue</code>（请求队列）和<code>struct block_device_operations</code>（块设备操作集）。它们的关系构成了驱动的基本骨架。</p>
+
+<div class="arch-diagram">
+  <div class="arch-row">
+    <div class="arch-node primary">应用层 (read/write)</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node secondary">VFS / 文件系统</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node accent">块设备层 (Request Queue)</div>
+    <span class="arch-connector">↓</span>
+    <div class="arch-node primary">驱动处理函数</div>
+  </div>
+  <div class="arch-row"><span class="arch-connector">↓</span></div>
+  <div class="arch-row">
+    <div class="arch-node secondary">gendisk</div>
+    <span class="arch-connector">⇄</span>
+    <div class="arch-node accent">硬件</div>
+  </div>
+</div>
+
+<table>
+<caption>块设备驱动关键数据结构与函数</caption>
+<thead>
+<tr><th>数据结构/函数</th><th>作用</th><th>关键成员/参数</th></tr>
+</thead>
+<tbody>
+<tr><td><code>struct gendisk</code></td><td>代表一个磁盘或分区，存储容量、分区信息等元数据。</td><td><code>-&gt;major</code>, <code>-&gt;first_minor</code>, <code>-&gt;fops</code>, <code>-&gt;queue</code>, <code>-&gt;capacity</code></td></tr>
+<tr><td><code>struct request_queue</code></td><td>I/O请求队列，内核将多个读写请求合并、排序后放入队列。</td><td>由 <code>blk_init_queue</code> 创建，需要绑定请求处理函数。</td></tr>
+<tr><td><code>struct block_device_operations</code></td><td>类似字符设备的 <code>file_operations</code>，定义块设备的操作。</td><td><code>-&gt;open</code>, <code>-&gt;release</code>, <code>-&gt;ioctl</code> (可选)。<strong>注意：没有read/write！</strong></td></tr>
+<tr><td><code>blk_init_queue</code></td><td>初始化一个请求队列，并指定请求处理函数。</td><td><code>(request_fn_proc *rfn, spinlock_t *lock)</code></td></tr>
+<tr><td><code>alloc_disk</code></td><td>动态分配一个 <code>gendisk</code> 结构体。</td><td><code>(int minors)</code> // minors指分区数量+1</td></tr>
+<tr><td><code>add_disk</code></td><td>将初始化好的 <code>gendisk</code> 注册到内核，设备立即可用。</td><td><code>(struct gendisk *disk)</code> // 调用后不可逆</td></tr>
+</tbody>
+</table>
+
+<p>上表中最关键的差异点：<code>block_device_operations</code> 中没有 <code>read</code> 和 <code>write</code> 函数。所有读写请求都由请求队列 (<code>request_queue</code>) 统一管理，这是块设备驱动性能优化的核心。</p>
+
+<div class="tip-box warning">
+<h4>⚠️ 常见误区</h4>
+<ul>
+<li><strong>在 <code>block_device_operations</code> 中寻找 read/write：</strong> 这是新手最常犯的错。块设备的读写通过请求队列机制异步处理，驱动需要实现的是请求处理函数，而不是直接的 read/write。</li>
+<li><strong>过早调用 <code>add_disk</code>：</strong> 必须在 <code>gendisk</code> 的所有信息（如容量、队列、操作集）都设置完毕后才能调用 <code>add_disk</code>。一旦调用，内核就可能开始向你的驱动发送I/O请求。</li>
+<li><strong>忽略请求队列的锁：</strong> <code>blk_init_queue</code> 需要一个自旋锁参数，请求处理函数在该锁的保护下运行。如果驱动其他部分也需要访问共享数据，必须使用同一把锁。</li>
+</ul>
+</div>
+
+<h3>从零实现一个RAMDISK驱动</h3>
+<p>让我们通过一个在内存中模拟的块设备（RAMDISK）来串联所有概念。这个驱动将分配一段内存（比如16MB），将其伪装成一个硬盘。</p>
+
+<div class="key-point">
+<h4>第一步：定义设备与初始化队列</h4>
+<p>首先定义设备结构体，包含<code>gendisk</code>指针、请求队列指针和内存缓冲区。在模块初始化函数中，我们需要完成三件事：1) 申请内存缓冲区；2) 初始化请求队列；3) 分配并设置<code>gendisk</code>。</p>
+</div>
+
+<pre><code><span class="cmt">// 1. 定义设备结构体</span>
+<span class="kw">struct</span> my_ramdisk_dev {
+    <span class="kw">unsigned</span> <span class="kw">char</span> *data;          <span class="cmt">// 内存缓冲区</span>
+    <span class="kw">struct</span> gendisk *gd;           <span class="cmt">// gendisk结构体</span>
+    <span class="kw">struct</span> request_queue *queue; <span class="cmt">// 请求队列</span>
+    <span class="kw">spinlock_t</span> lock;             <span class="cmt">// 自旋锁</span>
+};
+
+<span class="cmt">// 2. 模块初始化函数片段</span>
+<span class="kw">static int</span> <span class="func">__init</span> my_ramdisk_init(<span class="kw">void</span>)
+{
+    <span class="kw">struct</span> my_ramdisk_dev *dev;
+    <span class="kw">int</span> err = <span class="num">0</span>;
+
+    <span class="cmt">// 分配设备结构体</span>
+    dev = <span class="func">kzalloc</span>(<span class="kw">sizeof</span>(<span class="kw">struct</span> my_ramdisk_dev), GFP_KERNEL);
+    <span class="cmt">// 分配16MB内存作为“磁盘”空间</span>
+    dev->data = <span class="func">vzalloc</span>(<span class="num">16</span>*<span class="num">1024</span>*<span class="num">1024</span>);
+
+    <span class="cmt">// 初始化自旋锁，用于请求队列</span>
+    <span class="func">spin_lock_init</span>(&dev->lock);
+    <span class="cmt">// 初始化请求队列，绑定处理函数 my_request_fn</span>
+    dev->queue = <span class="func">blk_init_queue</span>(my_request_fn, &dev->lock);
+
+    <span class="cmt">// 分配一个gendisk，支持1个设备（即无分区）</span>
+    dev->gd = <span class="func">alloc_disk</span>(<span class="num">1</span>);
+    <span class="cmt">// 设置gendisk的主要属性</span>
+    dev->gd->major = MY_MAJOR;        <span class="cmt">// 主设备号</span>
+    dev->gd->first_minor = <span class="num">0</span>;
+    dev->gd->fops = &my_block_ops;    <span class="cmt">// 块设备操作集</span>
+    dev->gd->queue = dev->queue;      <span class="cmt">// 关联请求队列</span>
+    dev->gd->private_data = dev;      <span class="cmt">// 私有数据指针</span>
+    <span class="func">sprintf</span>(dev->gd->disk_name, <span class="str">"myram%d"</span>, <span class="num">0</span>);
+    <span class="func">set_capacity</span>(dev->gd, <span class="num">16</span>*<span class="num">2048</span>); <span class="cmt">// 容量=16MB/512字节=32768个扇区</span>
+
+    <span class="cmt">// 最后，将磁盘添加到系统</span>
+    <span class="func">add_disk</span>(dev->gd);
+    <span class="kw">return</span> <span class="num">0</span>;
+}</code></pre>
+
+<p>代码中<code>set_capacity</code>设置的容量单位是扇区（Sector），传统硬盘每个扇区512字节。所以16MB的容量就是 `16*1024*1024 / 512 = 32768` 个扇区。我在实际项目中曾忘记做这个转换，结果系统识别出的磁盘容量只有预期的1/512，排查了很久。</p>
+
+<h3>请求处理函数：驱动的“心脏”</h3>
+<p>请求处理函数是驱动真正处理读写的地方。内核的I/O调度器会将多个相邻的读写请求合并（Merge）和排序（Sort），形成一个<code>struct request</code>链表。你的函数需要遍历这个链表，处理每一个请求。</p>
+
+<div class="flowchart">
+  <div class="flow-step">驱动请求处理函数被调用</div><span class="flow-arrow">→</span>
+  <div class="flow-step">使用 blk_fetch_request 从队列获取请求</div><span class="flow-arrow">→</span>
+  <div class="flow-step">判断 req->cmd_flags (读/写)</div><span class="flow-arrow">→</span>
+  <div class="flow-step">计算内存偏移，执行 memcpy</div><span class="flow-arrow">→</span>
+  <div class="flow-step">使用 __blk_end_request_cur 结束请求</div>
+</div>
+
+<pre><code><span class="kw">static void</span> <span class="func">my_request_fn</span>(<span class="kw">struct</span> request_queue *q)
+{
+    <span class="kw">struct</span> request *req;
+    <span class="kw">struct</span> my_ramdisk_dev *dev = q->queuedata; <span class="cmt">// 从队列获取私有数据</span>
+    <span class="kw">int</span> err = <span class="num">0</span>;
+
+    <span class="cmt">// 循环处理队列中的所有请求</span>
+    <span class="kw">while</span> ((req = <span class="func">blk_fetch_request</span>(q)) != <span class="kw">NULL</span>) {
+        <span class="kw">sector_t</span> start_sector = <span class="func">blk_rq_pos</span>(req); <span class="cmt">// 起始扇区号</span>
+        <span class="kw">unsigned</span> <span class="kw">int</span> nr_sectors = <span class="func">blk_rq_cur_sectors</span>(req); <span class="cmt">// 当前请求扇区数</span>
+        <span class="kw">unsigned</span> <span class="kw">char</span> *buffer = <span class="func">bio_data</span>(req->bio); <span class="cmt">// 数据缓冲区</span>
+        <span class="kw">unsigned</span> <span class="kw">char</span> *dev_mem = dev->data + (start_sector << <span class="num">9</span>); <span class="cmt">// 设备内存偏移 (扇区号*512)</span>
+
+        <span class="cmt">// 判断是读请求还是写请求</span>
+        <span class="kw">if</span> (<span class="func">rq_data_dir</span>(req) == READ) {
+            <span class="func">memcpy</span>(buffer, dev_mem, nr_sectors << <span class="num">9</span>); <span class="cmt">// 从“设备”读到内存</span>
+        } <span class="kw">else</span> { <span class="cmt">// WRITE</span>
+            <span class="func">memcpy</span>(dev_mem, buffer, nr_sectors << <span class="num">9</span>); <span class="cmt">// 从内存写到“设备”</span>
+        }
+
+        <span class="cmt">// 标记当前请求处理完成，无错误。这是关键步骤！</span>
+        <span class="kw">if</span> (!<span class="func">__blk_end_request_cur</span>(req, err))
+            <span class="kw">break</span>; <span class="cmt">// 如果请求的所有数据段都处理完，req会变为NULL</span>
+    }
+}</code></pre>
+
+<p>这里有个隐藏的坑：<code>blk_rq_cur_sectors</code>返回的是当前<code>bio</code>（BIO是I/O请求的中间结构）的扇区数，一个复杂的请求可能包含多个<code>bio</code>。我们这里简化处理，对于RAMDISK足够了。但在真实硬盘驱动中，你需要用<code>blk_for_each_segment</code>和<code>blk_rq_map_sg</code>来遍历处理所有分散/聚集（Scatter/Gather）列表。</p>
+
+<div class="editor-note">
+<p><strong>编者提示：</strong> 请求处理函数中涉及大量的内核I/O数据结构，如<code>struct request</code>、<code>struct bio</code>。如果你想深入理解I/O请求在内存中的组织方式，可以结合第4章《内存管理与分配》中关于高端内存和DMA映射的知识，这对编写高性能块设备驱动至关重要。</p>
+</div>
+
+<div class="scenario-grid">
+  <div class="scenario-card blue"><h4>简单RAMDISK/虚拟设备</h4><ul><li>使用 <code>blk_init_queue</code></li><li>请求处理函数中直接<code>memcpy</code></li><li>适用于教学、快速原型</li></ul></div>
+  <div class="scenario-card green"><h4>基于真实硬件的驱动 (如SD卡)</h4><ul><li>使用 <code>blk_queue_make_request</code> (绕过I/O调度)</li><li>需处理DMA和硬件中断</li><li>需实现电源管理</li></ul></div>
+  <div class="scenario-card purple"><h4>高性能NVMe/SSD驱动</h4><ul><li>使用多队列块层(<code>blk_mq</code>)</li><li>实现轮询(Polling)模式减少延迟</li><li>涉及复杂的队列管理和中断绑定</li></ul></div>
+</div>
+
+<p>对于大多数嵌入式场景（比如为特定板载Flash芯片写驱动），你很可能从“基于真实硬件的驱动”模式开始。这时，<code>blk_init_queue</code>可能不再是最佳选择，因为它的单队列锁可能成为性能瓶颈。Linux 4.x之后的内核推荐使用多队列接口（<code>blk_mq</code>），但学习曲线更陡。</p>
+
+<div class="practice-box">
+<h4>动手试一试</h4>
+<p>1.  <strong>编译并加载RAMDISK驱动：</strong> 将本章的代码片段整合成一个完整的内核模块（需补充模块退出函数、主设备号申请等）。使用<code>insmod</code>加载后，用<code>lsblk</code>或<code>cat /proc/partitions</code>查看是否出现了名为<code>myram0</code>的块设备。<br>
+2.  <strong>格式化与挂载：</strong> 尝试用<code>sudo mkfs.ext4 /dev/myram0</code>在该设备上创建文件系统，然后用<code>mount</code>命令将其挂载到一个目录（如<code>/mnt/test</code>），在里面创建几个文件，测试读写是否正常。<br>
+3.  <strong>观察I/O调度：</strong> 在驱动加载后，查看你的设备的请求队列设置：<code>cat /sys/block/myram0/queue/scheduler</code>。理解当前使用的I/O调度算法（如<code>mq-deadline</code>或<code>none</code>）。</p>
+</div>
+
+<div class="self-check">
+<h4>检验你的理解</h4>
+<ol>
+<li>为什么块设备驱动操作集（<code>block_device_operations</code>）中没有<code>read</code>和<code>write</code>函数？读写请求是如何被处理的？</li>
+<li>函数<code>add_disk</code>应该在驱动初始化的哪个阶段调用？如果在设置<code>gendisk</code>容量之前调用，会发生什么？</li>
+<li>在请求处理函数中，<code>__blk_end_request_cur(req, 0)</code>这行代码的作用是什么？如果忘记调用它，会导致什么后果？</li>
+</ol>
+</div>
+
+<div class="summary-box">
+<h3>本章小结</h3>
+<ul>
+<li><strong>块设备的核心是随机访问和缓存：</strong> 它与字符设备的根本区别在于数据组织和访问方式，内核为其提供了请求队列和I/O调度来优化性能。</li>
+<li><strong>驱动框架围绕三个结构体构建：</strong> <code>gendisk</code>代表设备本体，<code>request_queue</code>管理I/O请求，<code>block_device_operations</code>处理设备控制操作（非读写）。</li>
+<li><strong>请求处理函数是驱动引擎：</strong> 你需要实现一个函数来处理从队列中取出的<code>request</code>，正确区分读/写方向，完成数据搬运，并最终使用<code>__blk_end_request_cur</code>等函数结束请求。</li>
+<li><strong>从简单到复杂的选择：</strong> 对于内存模拟设备，<code>blk_init_queue</code>加简单<code>memcpy</code>的模式就足够了；对于真实硬件，需要考虑DMA、中断和更现代的<code>blk_mq</code>框架。</li>
+</ul>
+</div>
+</div>
+        
+        <div class="chapter-nav">
+            <a href="12.html" class="nav-prev">&larr; 上一章</a>
+            <a href="00.html" class="nav-catalog">返回目录</a>
+            <a href="14.html" class="nav-next">下一章 &rarr;</a>
+        </div>
+        <div class="page-footer">— Linux内核驱动开发实战120例 · 第13章 —</div>
+    </div>
+</body>
+</html>
